@@ -1,0 +1,64 @@
+{
+  "_note": "Hours and holidays are a first draft compiled by hand. Every venue stays verified=false until checked against the exchange's own calendar. Non-US holiday lists cover 2026 only. Lunch breaks (Tokyo 11:30-12:30) are not modelled.",
+  "venues": {
+    "us_equity": {
+      "tz": "America/New_York",
+      "regular": "09:30-16:00",
+      "extended": ["04:00-09:30", "16:00-20:00"],
+      "holidays": [
+        "2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03", "2026-05-25", "2026-06-19",
+        "2026-07-03", "2026-09-07", "2026-11-26", "2026-12-25",
+        "2027-01-01", "2027-01-18", "2027-02-15", "2027-03-26", "2027-05-31", "2027-06-18",
+        "2027-07-05", "2027-09-06", "2027-11-25", "2027-12-24"
+      ],
+      "earlyClose": { "2026-11-27": "13:00", "2026-12-24": "13:00", "2027-11-26": "13:00" },
+      "verified": false
+    },
+    "krx": {
+      "tz": "Asia/Seoul",
+      "regular": "09:00-15:30",
+      "extended": [],
+      "holidays": [
+        "2026-01-01", "2026-02-16", "2026-02-17", "2026-02-18", "2026-03-02", "2026-05-01",
+        "2026-05-05", "2026-05-25", "2026-06-03", "2026-08-17", "2026-09-24", "2026-09-25",
+        "2026-10-05", "2026-10-09", "2026-12-25", "2026-12-31"
+      ],
+      "earlyClose": {},
+      "verified": false
+    },
+    "tse": {
+      "tz": "Asia/Tokyo",
+      "regular": "09:00-15:30",
+      "extended": [],
+      "holidays": ["2026-12-31", "2027-01-01"],
+      "earlyClose": {},
+      "verified": false
+    },
+    "nse": {
+      "tz": "Asia/Kolkata",
+      "regular": "09:15-15:30",
+      "extended": [],
+      "holidays": [],
+      "earlyClose": {},
+      "verified": false
+    },
+    "cme": {
+      "tz": "America/Chicago",
+      "regular": null,
+      "extended": [],
+      "holidays": ["2026-12-25", "2027-01-01"],
+      "earlyClose": {},
+      "continuous": { "weekOpen": "17:00", "weekClose": "16:00", "dailyBreak": "16:00-17:00" },
+      "verified": false
+    },
+    "fx": {
+      "tz": "America/New_York",
+      "regular": null,
+      "extended": [],
+      "holidays": ["2026-12-25", "2027-01-01"],
+      "earlyClose": {},
+      "continuous": { "weekOpen": "17:00", "weekClose": "17:00", "dailyBreak": null },
+      "verified": false
+    }
+  }
+}
