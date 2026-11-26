@@ -9,6 +9,9 @@
     "collect": "tsx src/cli.ts collect",
     "status": "tsx src/cli.ts status",
     "compact": "tsx src/cli.ts compact",
+    "detect": "tsx src/cli.ts detect",
+    "events": "tsx src/cli.ts events",
+    "states": "tsx src/cli.ts states",
     "session": "tsx src/cli.ts session",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts"

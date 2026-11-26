@@ -60,6 +60,27 @@ CREATE TABLE IF NOT EXISTS bars_1m (
 
 CREATE INDEX IF NOT EXISTS ticks_ts ON ticks (ts);
 
+-- Detector output. states holds one row per change of (state, confidence, conflict).
+CREATE TABLE IF NOT EXISTS states (
+  coin TEXT NOT NULL,
+  ts INTEGER NOT NULL,
+  state TEXT NOT NULL,
+  confidence TEXT NOT NULL,
+  calendar TEXT NOT NULL,
+  behavior TEXT NOT NULL,
+  conflict INTEGER NOT NULL,
+  metrics TEXT NOT NULL,
+  PRIMARY KEY (coin, ts)
+) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS events (
+  coin TEXT NOT NULL,
+  ts INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  detail TEXT NOT NULL,
+  PRIMARY KEY (coin, kind, ts)
+) WITHOUT ROWID;
+
 CREATE TABLE IF NOT EXISTS ws_events (
   ts INTEGER NOT NULL,
   kind TEXT NOT NULL,
@@ -215,6 +236,14 @@ export class Store {
     }
     res.pollsRemoved = Number(this.db.prepare("DELETE FROM polls WHERE ts < ?").run(now - pollRetentionMs).changes);
     return res;
+  }
+
+  /** Latest stored dex config body, parsed, or null. */
+  latestDexConfig(dex: string): Record<string, unknown> | null {
+    const row = this.db
+      .prepare("SELECT body FROM dex_config WHERE dex = ? ORDER BY ts DESC LIMIT 1")
+      .get(dex) as { body: string } | undefined;
+    return row ? (JSON.parse(row.body) as Record<string, unknown>) : null;
   }
 
   /** Returns freed pages to the filesystem. Rewrites the whole file, so run it rarely. */
