@@ -3,8 +3,10 @@
 Watches oracle state and mark/oracle dislocations on Hyperliquid HIP-3 equity and
 commodity perps. Read-only: it places no orders and holds no keys.
 
-Status: week 2 of 4. The collector, storage, session calendar and state detector
-exist. The MCP server, HTTP endpoints and alerts do not yet.
+Status: week 3 of 4. The collector, detector, MCP server, HTTP API and status page
+exist. Alerts do not yet.
+
+![Status page](docs/status-page.png)
 
 ## Run
 
@@ -39,8 +41,15 @@ npm run states -- --db oracle-watch.db
 ```
 
 ```bash
+npm run serve -- --db oracle-watch.db --port 8787
+```
+
+```bash
 npm run session -- xyz:NVDA
 ```
+
+Three processes share one database file: `collect` writes ticks, `detect --follow`
+writes states and events, and `serve` or `mcp` reads them.
 
 `collect` polls `metaAndAssetCtxs` for the whole dex every 5 seconds and follows the
 40 most traded coins over WebSocket (`activeAssetCtx`). A row is written only when
@@ -94,6 +103,50 @@ the Korean evening session in the calendar both come from that same day, so this
 is an in-sample check, not a validation.
 Treat the output as an inference to be checked, not as a statement by the deployer.
 
+## MCP server
+
+`mcp` speaks the Model Context Protocol over stdio and exposes five read-only tools.
+
+| Tool | Answers |
+|---|---|
+| `get_oracle_state` | state, evidence, basis, funding and next session change for one perp |
+| `list_dislocations` | perps with the widest mark/oracle gap right now |
+| `get_events` | recent detector events, filterable by perp and kind |
+| `get_basis_history` | basis and funding time series |
+| `get_session_calendar` | sessions of the underlying market |
+
+Client configuration, with absolute paths filled in:
+
+```json
+{
+  "mcpServers": {
+    "hip3-oracle-watch": {
+      "command": "npx",
+      "args": ["tsx", "/path/to/hip3-oracle-watch/src/cli.ts", "mcp", "--db", "/path/to/oracle-watch.db"]
+    }
+  }
+}
+```
+
+Every answer carries the observation time, the source, units, and a `health` block
+saying whether the collector and detector are currently running, so a client can
+tell a quiet market from a stopped pipeline.
+
+## HTTP API
+
+`serve` binds to 127.0.0.1 by default and serves the status page at `/`. There is
+no authentication; put it behind a reverse proxy before exposing it.
+
+| Route | Parameters |
+|---|---|
+| `GET /v1/health` | |
+| `GET /v1/overview` | |
+| `GET /v1/state/{coin}` | |
+| `GET /v1/dislocations` | `minBp`, `state`, `limit` |
+| `GET /v1/events` | `coin`, `kind`, `hours`, `limit` |
+| `GET /v1/basis/{coin}` | `hours`, `intervalMinutes` |
+| `GET /v1/calendar/{coin}` | |
+
 ## Data
 
 SQLite, one file.
@@ -104,6 +157,7 @@ SQLite, one file.
 | `bars_1m` | one-minute bars built from ticks older than the retention window |
 | `states` | detector output, one row per change of state, confidence or conflict |
 | `events` | detector events |
+| `kv` | detector heartbeat |
 | `polls` | one row per successful full poll; coverage is measured here |
 | `dex_config` | `perpDexs` entry for the dex, stored when it changes |
 | `ws_events` | socket opens and closes |

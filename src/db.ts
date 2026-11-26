@@ -82,6 +82,11 @@ CREATE TABLE IF NOT EXISTS events (
   PRIMARY KEY (coin, kind, ts)
 ) WITHOUT ROWID;
 
+CREATE TABLE IF NOT EXISTS kv (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+) WITHOUT ROWID;
+
 CREATE TABLE IF NOT EXISTS ws_events (
   ts INTEGER NOT NULL,
   kind TEXT NOT NULL,
@@ -237,6 +242,14 @@ export class Store {
     }
     res.pollsRemoved = Number(this.db.prepare("DELETE FROM polls WHERE ts < ?").run(now - pollRetentionMs).changes);
     return res;
+  }
+
+  setKv(key: string, value: string): void {
+    this.db.prepare("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)").run(key, value);
+  }
+
+  getKv(key: string): string | null {
+    return (this.db.prepare("SELECT value FROM kv WHERE key = ?").get(key) as { value: string } | undefined)?.value ?? null;
   }
 
   /** Latest stored dex config body, parsed, or null. */

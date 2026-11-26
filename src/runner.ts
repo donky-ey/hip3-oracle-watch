@@ -121,6 +121,8 @@ export class Runner {
     }
     this.cursor = Math.max(this.cursor, until);
     this.persist(sink);
+    // Lets readers tell a quiet market from a detector that is not running.
+    this.store.setKv("detector_last_run", String(now));
     return sink.events;
   }
 

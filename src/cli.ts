@@ -5,6 +5,9 @@ import { Store } from "./db.ts";
 import { perpCategories } from "./hl.ts";
 import { sessionFor } from "./calendar.ts";
 import { Runner, runnerDefaults } from "./runner.ts";
+import { Queries } from "./query.ts";
+import { startHttp } from "./http.ts";
+import { runStdio } from "./mcp.ts";
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
@@ -17,12 +20,22 @@ const { positionals, values } = parseArgs({
     "retention-days": { type: "string", default: String(defaults.retentionDays) },
     vacuum: { type: "boolean", default: false },
     follow: { type: "boolean", default: false },
+    port: { type: "string", default: "8787" },
+    host: { type: "string", default: "127.0.0.1" },
     kind: { type: "string" },
     coin: { type: "string" },
   },
 });
 const cmd = positionals[0];
 const iso = (ts: number) => new Date(ts).toISOString();
+/** Categories only refine the venue mapping, so the read-only servers start without them if the API is unreachable. */
+const categoriesOrEmpty = async () => {
+  try {
+    return await perpCategories();
+  } catch {
+    return new Map<string, string>();
+  }
+};
 
 if (cmd === "collect") {
   const c = new Collector({
@@ -130,6 +143,20 @@ if (cmd === "collect") {
     );
   }
   store.close();
+} else if (cmd === "serve") {
+  const store = new Store(values.db!);
+  const server = startHttp(new Queries(store, await categoriesOrEmpty()), Number(values.port), values.host!);
+  console.log(`status page and API on http://${values.host}:${values.port}/`);
+  const stop = () => {
+    server.close();
+    store.close();
+    process.exit(0);
+  };
+  process.on("SIGINT", stop);
+  process.on("SIGTERM", stop);
+} else if (cmd === "mcp") {
+  // stdout carries the protocol; nothing else may be printed there.
+  await runStdio(new Queries(new Store(values.db!), await categoriesOrEmpty()));
 } else if (cmd === "session") {
   const coin = positionals[1];
   if (!coin) throw new Error("usage: session <coin>, e.g. session xyz:NVDA");
@@ -137,6 +164,6 @@ if (cmd === "collect") {
   const s = sessionFor(coin, Date.now(), cats.get(coin));
   console.log(JSON.stringify({ ...s, next: s.next && { ...s.next, at: iso(s.next.ts) } }, null, 2));
 } else {
-  console.log("usage: cli.ts <collect|status|compact|detect|events|states|session <coin>> [--db path] [--dex xyz] [--poll-ms 5000] [--ws-top 40] [--hours 24] [--retention-days 7] [--vacuum] [--follow] [--kind k] [--coin c]");
+  console.log("usage: cli.ts <collect|status|compact|detect|events|states|serve|mcp|session <coin>> [--db path] [--dex xyz] [--poll-ms 5000] [--ws-top 40] [--hours 24] [--retention-days 7] [--vacuum] [--follow] [--kind k] [--coin c] [--port 8787] [--host 127.0.0.1]");
   process.exit(cmd ? 1 : 0);
 }

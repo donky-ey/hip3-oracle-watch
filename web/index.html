@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HIP-3 oracle watch</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #1c1d1f; --muted: #6b6f76; --line: #e3e3df;
+    --external: #1f7a4d; --internal: #8a5a00; --transition: #5b4bc4; --stale: #b3261e; --unknown: #6b6f76;
+    --pos: #1f7a4d; --neg: #b3261e; --warn-bg: #fff4d6; --warn-ink: #6b4a00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141516; --panel: #1c1d1f; --ink: #ececea; --muted: #9a9ea6; --line: #2c2e31;
+      --external: #5fd39a; --internal: #f0b14a; --transition: #a99bff; --stale: #ff8a80; --unknown: #9a9ea6;
+      --pos: #5fd39a; --neg: #ff8a80; --warn-bg: #3a2f10; --warn-ink: #f0d58a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 20px; margin: 0 0 2px; }
+  h2 { font-size: 14px; margin: 28px 0 8px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .sub { color: var(--muted); margin: 0 0 14px; }
+  .banner { background: var(--warn-bg); color: var(--warn-ink); padding: 8px 12px; border-radius: 6px; margin: 0 0 12px; }
+  .banner[hidden] { display: none; }
+  .tally { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+  .tally button { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+  .tally button[aria-pressed="true"] { border-color: var(--ink); }
+  .wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { padding: 7px 12px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2), .l { text-align: left; }
+  th { font-weight: 600; color: var(--muted); font-size: 12px; position: sticky; top: 0; background: var(--panel); }
+  tr:last-child td { border-bottom: 0; }
+  .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; font-size: 12px; }
+  .external { color: var(--external); } .internal { color: var(--internal); } .transition { color: var(--transition); }
+  .stale { color: var(--stale); } .unknown { color: var(--unknown); }
+  .pos { color: var(--pos); } .neg { color: var(--neg); } .muted { color: var(--muted); }
+  .detail { white-space: normal; text-align: left; color: var(--muted); font-size: 12px; }
+  footer { color: var(--muted); font-size: 12px; margin-top: 24px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>HIP-3 oracle watch</h1>
+  <p class="sub" id="sub">Loading…</p>
+  <p class="banner" id="banner" hidden></p>
+  <div class="tally" id="tally"></div>
+  <div class="wrap"><table>
+    <thead><tr><th>Perp</th><th>Oracle state</th><th class="l">Evidence</th><th>Basis</th><th>Funding / h</th><th>Oracle</th><th>Mark</th><th>OI</th><th>Age</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table></div>
+  <h2>Events, last 24 hours</h2>
+  <div class="wrap"><table>
+    <thead><tr><th>Time (UTC)</th><th>Kind</th><th class="l">Perp</th><th class="l">Detail</th></tr></thead>
+    <tbody id="events"></tbody>
+  </table></div>
+  <footer>Oracle state is inferred from the session calendar and from how the oracle has been moving. The deployer does not publish it. Basis is (mark ÷ oracle − 1) in basis points. Not investment advice.</footer>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const usd = (n) => n >= 1e9 ? (n / 1e9).toFixed(2) + "B" : n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(0) + "K" : String(n);
+const signed = (n, d) => (n > 0 ? "+" : "") + n.toFixed(d);
+let filter = null;
+
+function render(o, ev) {
+  const h = o.health;
+  $("sub").textContent = `${o.coins.length} perps · updated ${new Date(h.now).toISOString().slice(11, 19)} UTC`;
+  const problems = [];
+  if (!h.collectorRunning) problems.push("The collector has not polled in the last minute, so prices below may be old.");
+  if (!h.detectorRunning) problems.push("The detector is not running, so oracle states below may be out of date.");
+  $("banner").hidden = problems.length === 0;
+  $("banner").textContent = problems.join(" ");
+
+  const counts = {};
+  for (const c of o.coins) counts[c.state] = (counts[c.state] || 0) + 1;
+  const tally = $("tally"); tally.replaceChildren();
+  for (const [name, n] of [["all", o.coins.length], ...Object.entries(counts).sort((a, b) => b[1] - a[1])]) {
+    const b = el("button", null, `${name} ${n}`);
+    const on = name === "all" ? filter === null : filter === name;
+    b.setAttribute("aria-pressed", String(on));
+    b.onclick = () => { filter = name === "all" ? null : name; render(o, ev); };
+    tally.append(b);
+  }
+
+  const rows = $("rows"); rows.replaceChildren();
+  for (const c of o.coins.filter((c) => !filter || c.state === filter)) {
+    const tr = el("tr");
+    tr.append(el("td", null, c.coin));
+    const st = el("td"); st.append(el("span", "chip " + c.state, c.state)); tr.append(st);
+    tr.append(el("td", "l muted", c.calendarConflict ? "behavior, calendar disagrees" : c.confidence === "both" ? "calendar and behavior" : c.confidence === "none" ? "—" : c.confidence + " only"));
+    tr.append(el("td", c.basisBp > 0 ? "pos" : c.basisBp < 0 ? "neg" : "muted", signed(c.basisBp, 1) + " bp"));
+    tr.append(el("td", Math.abs(c.fundingHourly) >= 0.0005 ? (c.fundingHourly > 0 ? "pos" : "neg") : "muted", signed(c.fundingHourly * 100, 4) + "%"));
+    tr.append(el("td", null, String(c.oraclePx)), el("td", null, String(c.markPx)), el("td", "muted", "$" + usd(c.openInterestUsd)));
+    tr.append(el("td", "muted", c.ageSeconds < 120 ? c.ageSeconds + "s" : Math.round(c.ageSeconds / 60) + "m"));
+    rows.append(tr);
+  }
+
+  const evs = $("events"); evs.replaceChildren();
+  if (ev.events.length === 0) { const tr = el("tr"); const td = el("td", "l muted", "No events in the last 24 hours."); td.colSpan = 4; tr.append(td); evs.append(tr); }
+  for (const e of ev.events) {
+    const tr = el("tr");
+    tr.append(el("td", "muted", e.at.slice(5, 19).replace("T", " ")), el("td", null, e.kind.replace(/_/g, " ")), el("td", "l", e.coin));
+    tr.append(el("td", "detail", Object.entries(e.detail).map(([k, v]) => `${k} ${v}`).join(" · ")));
+    evs.append(tr);
+  }
+}
+
+async function tick() {
+  try {
+    const [o, ev] = await Promise.all([fetch("v1/overview").then((r) => r.json()), fetch("v1/events?hours=24&limit=100").then((r) => r.json())]);
+    render(o, ev);
+  } catch (e) {
+    $("banner").hidden = false;
+    $("banner").textContent = "Could not reach the API. Retrying.";
+  }
+}
+tick();
+setInterval(tick, 10000);
+</script>
+</body>
+</html>
