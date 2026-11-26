@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { existsSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { Collector, defaults } from "./collector.ts";
 import { Store } from "./db.ts";
@@ -56,6 +57,51 @@ if (cmd === "collect") {
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
   await c.start();
+} else if (cmd === "run") {
+  // Everything in one process, for a single small container: collector, detector,
+  // status page and API, and alerts when a config file is present.
+  const log = (m: string) => console.log(`${iso(Date.now())} ${m}`);
+  const port = Number(process.env.PORT ?? values.port);
+  const collector = new Collector({
+    ...defaults, dex: values.dex!, dbPath: values.db!, pollMs: Number(values["poll-ms"]),
+    wsTopN: Number(values["ws-top"]), retentionDays: Number(values["retention-days"]), log,
+  });
+  await collector.start();
+  const store = new Store(values.db!);
+  const categories = await categoriesOrEmpty();
+  const runner = new Runner(store, { ...runnerDefaults, dex: values.dex!, categories }, Date.now() - Number(values.hours) * 3_600_000);
+  const server = startHttp(new Queries(store, categories), port, values.host!);
+  log(`status page and API on http://${values.host}:${port}/`);
+  const alertCfg = existsSync(values.config!) ? loadConfig(values.config!) : null;
+  log(alertCfg ? `alerts on, ${alertCfg.sinks.length} sink(s)` : `alerts off (no ${values.config})`);
+  let busy = false;
+  const cycle = async () => {
+    if (busy) return;
+    busy = true;
+    try {
+      runner.loadCaps();
+      for (const e of runner.advance(Date.now())) log(`${e.kind} ${e.coin} ${JSON.stringify(e.detail)}`);
+      if (alertCfg) {
+        const r = await dispatch(store, alertCfg, Date.now(), { ...dispatchDefaults, log });
+        if (r.sent || r.failed) log(`alerts sent=${r.sent} failed=${r.failed}`);
+      }
+    } catch (e) {
+      log(`cycle failed: ${(e as Error).message}`);
+    } finally {
+      busy = false;
+    }
+  };
+  await cycle();
+  const timer = setInterval(() => void cycle(), 10_000);
+  const stop = () => {
+    clearInterval(timer);
+    server.close();
+    collector.stop();
+    store.close();
+    process.exit(0);
+  };
+  process.on("SIGINT", stop);
+  process.on("SIGTERM", stop);
 } else if (cmd === "status") {
   const store = new Store(values.db!);
   const to = Date.now();
@@ -194,6 +240,6 @@ if (cmd === "collect") {
   const s = sessionFor(coin, Date.now(), cats.get(coin));
   console.log(JSON.stringify({ ...s, next: s.next && { ...s.next, at: iso(s.next.ts) } }, null, 2));
 } else {
-  console.log("usage: cli.ts <collect|status|compact|detect|events|states|serve|mcp|alert|session <coin>> [--db path] [--dex xyz] [--poll-ms 5000] [--ws-top 40] [--hours 24] [--retention-days 7] [--vacuum] [--follow] [--kind k] [--coin c] [--port 8787] [--host 127.0.0.1] [--config alerts.json] [--once]");
+  console.log("usage: cli.ts <run|collect|status|compact|detect|events|states|serve|mcp|alert|session <coin>> [--db path] [--dex xyz] [--poll-ms 5000] [--ws-top 40] [--hours 24] [--retention-days 7] [--vacuum] [--follow] [--kind k] [--coin c] [--port 8787] [--host 127.0.0.1] [--config alerts.json] [--once]");
   process.exit(cmd ? 1 : 0);
 }

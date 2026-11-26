@@ -8,6 +8,7 @@
     "node": ">=22.13"
   },
   "scripts": {
+    "start": "tsx src/cli.ts run",
     "collect": "tsx src/cli.ts collect",
     "status": "tsx src/cli.ts status",
     "compact": "tsx src/cli.ts compact",
@@ -25,12 +26,12 @@
     "@modelcontextprotocol/sdk": "^1.32.2",
     "https-proxy-agent": "^7.0.6",
     "ws": "^8.18.0",
-    "zod": "^4.6.7"
+    "zod": "^4.6.7",
+    "tsx": "^4.19.2"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "@types/ws": "^8.5.13",
-    "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }
 }

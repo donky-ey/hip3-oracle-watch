@@ -66,6 +66,24 @@ any stretch longer than three poll intervals without a successful poll.
 Behind an HTTPS proxy, set `NODE_USE_ENV_PROXY=1` so `fetch` honours `HTTPS_PROXY`.
 The WebSocket picks the proxy up on its own.
 
+## Deploy
+
+One container runs everything:
+
+```bash
+npm start -- --db /data/oracle-watch.db --host 0.0.0.0
+```
+
+`run` starts the collector, the detector, the status page and API, and alerts if
+the file named by `--config` exists. It listens on `PORT` when the platform sets
+it. Measured at about 110 MB of memory and 2% of one core for 150 perps.
+
+The `Dockerfile` does the same and expects a persistent volume at `/data`. Budget
+5 GB: seven days of raw ticks settle near 2.6 GB and one-minute bars add about 1 GB
+a month. Without a volume the database is lost on every redeploy.
+
+The HTTP API has no authentication. Keep it private or put it behind a proxy.
+
 ## Oracle state
 
 The API does not say whether the deployer's oracle is following an external market
