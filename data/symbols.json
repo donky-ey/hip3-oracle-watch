@@ -1,5 +1,5 @@
 {
-  "_note": "Ticker -> underlying venue. Category defaults come from Hyperliquid's perpCategories. 'unknown' means the reference market has not been identified and the calendar must not be used for that ticker. All mappings are unverified guesses until checked against the deployer's market specification.",
+  "_note": "Ticker -> underlying venue. Category defaults come from Hyperliquid's perpCategories. 'unknown' means the reference market has not been identified and the calendar must not be used for that ticker. All mappings are unverified guesses until checked against the deployer's market specification. Tickers set to unknown after observation: KR200, JP225, SOFTBANK and KIOXIA kept an external-looking oracle well after their cash market closed (night futures or an evening venue, not identified), and SKHY behaved like internal pricing while SKHX did not, so it does not share SKHX's reference market.",
   "categoryDefault": {
     "stocks": "us_equity",
     "commodities": "cme",
@@ -8,13 +8,31 @@
     "preipo": "unknown"
   },
   "overrides": {
-    "SKHX": "krx", "SKHY": "krx", "SMSN": "krx", "HYUNDAI": "krx", "KR200": "krx",
-    "SOFTBANK": "tse", "KIOXIA": "tse", "IBIDEN": "tse", "JP225": "tse",
-    "RELIANCE": "nse", "JIO": "nse", "NIFTY": "nse",
-    "SP500": "cme", "XYZ100": "cme",
+    "SKHX": "krx",
+    "SKHY": "unknown",
+    "SMSN": "krx",
+    "HYUNDAI": "krx",
+    "KR200": "unknown",
+    "SOFTBANK": "unknown",
+    "KIOXIA": "unknown",
+    "IBIDEN": "unknown",
+    "JP225": "unknown",
+    "RELIANCE": "nse",
+    "JIO": "nse",
+    "NIFTY": "nse",
+    "SP500": "cme",
+    "XYZ100": "cme",
     "DXY": "fx",
-    "CAMBRICON": "unknown", "CXMT": "unknown", "GIGADEV": "unknown", "ZHIPU": "unknown",
-    "MINIMAX": "unknown", "UNITREE": "unknown", "SHEIN": "unknown", "ANT": "unknown",
-    "VIX": "unknown", "VOL": "unknown", "OURA": "unknown"
+    "CAMBRICON": "unknown",
+    "CXMT": "unknown",
+    "GIGADEV": "unknown",
+    "ZHIPU": "unknown",
+    "MINIMAX": "unknown",
+    "UNITREE": "unknown",
+    "SHEIN": "unknown",
+    "ANT": "unknown",
+    "VIX": "unknown",
+    "VOL": "unknown",
+    "OURA": "unknown"
   }
 }

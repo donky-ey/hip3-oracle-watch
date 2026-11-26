@@ -81,7 +81,8 @@ export class Runner {
       );
       this.counts.evals++;
       this.latest.set(coin, state);
-      const key = `${state.state}|${state.confidence}|${state.conflict}`;
+      // Confidence wobbles at the evidence threshold; a row is written only when the state itself changes.
+      const key = `${state.state}|${state.conflict}`;
       if (this.lastKey.get(coin) !== key) {
         this.lastKey.set(coin, key);
         sink.states.push(state);

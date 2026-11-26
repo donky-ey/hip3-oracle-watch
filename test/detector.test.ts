@@ -37,11 +37,13 @@ function feedExternal(mem: CoinMemory, from: number, n: number, start = 100): nu
 
 test("windowStats counts oracle updates and their direction relative to mark", () => {
   const w = [tick(0, 100, 101), tick(1, 100.5, 101), tick(2, 100.5, 100.9), tick(3, 100.2, 100.9), tick(4, 100.2, 100.2), tick(5, 100.4, 100.2)];
-  assert.deepEqual(windowStats(w), { updates: 3, towardMark: 0.5 });
-  assert.equal(judgeBehavior({ updates: 2, towardMark: 1 }), "inconclusive");
-  assert.equal(judgeBehavior({ updates: 8, towardMark: 1 }), "internal");
-  assert.equal(judgeBehavior({ updates: 8, towardMark: 0.5 }), "external");
-  assert.equal(judgeBehavior({ updates: 8, towardMark: 0.8 }), "inconclusive");
+  assert.deepEqual(windowStats(w), { updates: 3, judged: 2, towardMark: 0.5 });
+  assert.equal(judgeBehavior({ updates: 2, judged: 2, towardMark: 1 }), "inconclusive");
+  assert.equal(judgeBehavior({ updates: 8, judged: 8, towardMark: 1 }), "internal");
+  assert.equal(judgeBehavior({ updates: 8, judged: 8, towardMark: 0.5 }), "external");
+  assert.equal(judgeBehavior({ updates: 8, judged: 8, towardMark: 0.8 }), "inconclusive");
+  // Mark pinned to oracle: 60 updates but only 8 with a direction to judge.
+  assert.equal(judgeBehavior({ updates: 60, judged: 8, towardMark: 1 }), "inconclusive");
 });
 
 test("agreement between calendar and behavior gives confidence 'both'", () => {
@@ -97,7 +99,7 @@ test("a quiet spell does not hand the mode back to a calendar that was just cont
   assert.equal(last, "external/behavior");
   assert.equal(kinds.includes("mode_switch"), false);
   // The calendar phase itself changing releases the hold.
-  const r = evaluate(m, { coin: "c", now: t + 30 * S, session: open });
+  const r = evaluate(m, { coin: "c", now: t + 30 * S, session: { phase: "extended", nearBoundary: false } });
   assert.equal(`${r.state.state}/${r.state.confidence}`, "external/calendar");
 });
 
@@ -137,16 +139,49 @@ test("oracle jump fires on a single large update but not across a data gap", () 
   assert.equal(evaluate(m, { coin: "c", now: 610 * S, session: open }).events.filter((e) => e.kind === "oracle_jump").length, 0);
 });
 
-test("stale oracle is raised once and cleared when the oracle moves again", () => {
+test("stale oracle is raised once in external mode and cleared when the oracle moves again", () => {
   const m = newMemory();
-  observe(m, "c", tick(0, 100, 100));
-  for (let i = 1; i <= 8; i++) observe(m, "c", tick(i * 120 * S, 100, 100 + i * 0.01));
-  const r1 = evaluate(m, { coin: "c", now: 961 * S, session: open });
+  let o = feedExternal(m, 0, 40);
+  assert.equal(evaluate(m, { coin: "c", now: 200 * S, session: open }).state.state, "external");
+  for (let i = 1; i <= 8; i++) observe(m, "c", tick((200 + i * 40) * S, o, o + i * 0.01));
+  const r1 = evaluate(m, { coin: "c", now: 521 * S, session: open });
   assert.equal(r1.state.state, "stale");
   assert.deepEqual(r1.events.map((e) => e.kind), ["oracle_stale"]);
-  assert.equal(evaluate(m, { coin: "c", now: 991 * S, session: open }).events.length, 0);
-  observe(m, "c", tick(1000 * S, 100.05, 100.08));
-  assert.notEqual(evaluate(m, { coin: "c", now: 1021 * S, session: open }).state.state, "stale");
+  assert.equal(evaluate(m, { coin: "c", now: 551 * S, session: open }).events.length, 0);
+  o += 0.05;
+  observe(m, "c", tick(560 * S, o, o + 0.03));
+  assert.notEqual(evaluate(m, { coin: "c", now: 581 * S, session: open }).state.state, "stale");
+});
+
+test("a silent oracle is not stale while the underlying is closed", () => {
+  const m = newMemory();
+  const o = feedInternal(m, 0, 16);
+  for (let i = 1; i <= 12; i++) observe(m, "c", tick((320 + i * 60) * S, o, o + 0.3 + i * 0.01));
+  const r = evaluate(m, { coin: "c", now: 1100 * S, session: closed });
+  assert.equal(r.state.state, "internal");
+  assert.equal(r.events.filter((e) => e.kind === "oracle_stale").length, 0);
+});
+
+test("one noisy window plus the calendar cannot switch a behavior-established mode", () => {
+  const m = newMemory();
+  let t = 0;
+  let o = 100;
+  for (let i = 0; i < 12; i++) {
+    o = feedExternal(m, t, 6, o);
+    t += 30 * S;
+    evaluate(m, { coin: "c", now: t, session: closed });
+  }
+  const kinds: string[] = [];
+  // A burst that happens to move toward mark every time, then silence.
+  for (let i = 0; i < 70; i++) { o += 0.001; observe(m, "c", tick(t + i * 400, o, o + 0.5)); }
+  t += 30 * S;
+  kinds.push(...evaluate(m, { coin: "c", now: t, session: closed }).events.map((e) => e.kind));
+  for (let i = 0; i < 12; i++) {
+    o = feedExternal(m, t, 6, o);
+    t += 30 * S;
+    kinds.push(...evaluate(m, { coin: "c", now: t, session: closed }).events.map((e) => e.kind));
+  }
+  assert.equal(kinds.includes("mode_switch"), false);
 });
 
 test("funding and open-interest cap conditions", () => {
@@ -223,4 +258,30 @@ test("runner does not evaluate past the data or across a collector outage", () =
   // About 13 evaluations per 400 s stretch, none in the hour between or the day after.
   assert.ok(r.counts.evals >= 20 && r.counts.evals <= 30, `evals=${r.counts.evals}`);
   store.close();
+});
+
+test("at a scheduled close, lagging behavior is not a conflict and the calendar takes over", () => {
+  const m = newMemory();
+  const ext: SessionInput = { phase: "extended", nearBoundary: false };
+  let t = 0;
+  let o = 100;
+  for (let i = 0; i < 12; i++) {
+    o = feedExternal(m, t, 6, o);
+    t += 30 * S;
+    evaluate(m, { coin: "c", now: t, session: ext });
+  }
+  // Venue closes: a few catch-up updates, then the oracle goes quiet.
+  const kinds: string[] = [];
+  const seen: string[] = [];
+  for (let i = 0; i < 4; i++) { o += 0.01; observe(m, "c", tick(t + i * 5 * S, o, o + 0.2)); }
+  for (let i = 0; i < 44; i++) {
+    t += 30 * S;
+    const r = evaluate(m, { coin: "c", now: t, session: { phase: "closed", nearBoundary: i < 20 } });
+    kinds.push(...r.events.map((e) => e.kind));
+    seen.push(r.state.state);
+  }
+  assert.equal(kinds.includes("calendar_conflict"), false);
+  assert.ok(seen.includes("transition"));
+  assert.equal(seen.at(-1), "internal");
+  assert.deepEqual(kinds.filter((k) => k === "mode_switch"), ["mode_switch"]);
 });

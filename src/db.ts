@@ -60,7 +60,8 @@ CREATE TABLE IF NOT EXISTS bars_1m (
 
 CREATE INDEX IF NOT EXISTS ticks_ts ON ticks (ts);
 
--- Detector output. states holds one row per change of (state, confidence, conflict).
+-- Detector output. states holds one row per change of state or conflict flag;
+-- confidence and metrics are as of that change.
 CREATE TABLE IF NOT EXISTS states (
   coin TEXT NOT NULL,
   ts INTEGER NOT NULL,

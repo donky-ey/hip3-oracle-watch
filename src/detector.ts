@@ -44,7 +44,7 @@ export const defaultConfig: DetectorConfig = {
   minUpdates: 6,
   internalToward: 0.9,
   externalToward: 0.7,
-  staleMs: 15 * 60_000,
+  staleMs: 5 * 60_000,
   staleMinMarkChanges: 5,
   switchConfirmations: 2,
   basisBreachBp: 50,
@@ -134,8 +134,12 @@ export interface CoinMemory {
   firstTs: number | null;
   /** Consecutive evaluations in which calendar and behavior disagreed. */
   conflictCount: number;
-  /** Calendar phase that behavior has contradicted. While it lasts, the calendar alone cannot set the mode. */
-  distrustedPhase: SessionInput["phase"] | null;
+  /**
+   * Calendar phase during which behavior last established the mode. Until the
+   * phase changes, the calendar alone can neither replace that mode nor confirm
+   * a switch away from it, so a quiet spell or one noisy window does not flip it.
+   */
+  behaviorPhase: SessionInput["phase"] | null;
   breachSince: number | null;
   /** Conditions currently raised, so each is reported once per episode. */
   raised: Set<EventKind>;
@@ -155,7 +159,7 @@ export function newMemory(): CoinMemory {
     lastEvalTs: null,
     firstTs: null,
     conflictCount: 0,
-    distrustedPhase: null,
+    behaviorPhase: null,
     breachSince: null,
     raised: new Set(),
     pendingJumps: [],
@@ -208,6 +212,8 @@ export function resetAfterGap(mem: CoinMemory): void {
 
 export interface WindowStats {
   updates: number;
+  /** Updates made while mark differed from oracle; only these say anything about direction. */
+  judged: number;
   /** Of the updates made while mark differed from oracle, the share that moved toward mark. */
   towardMark: number | null;
 }
@@ -225,11 +231,13 @@ export function windowStats(window: DTick[]): WindowStats {
     judged++;
     if ((b.oracle - a.oracle) * (a.mark - a.oracle) > 0) toward++;
   }
-  return { updates, towardMark: judged > 0 ? toward / judged : null };
+  return { updates, judged, towardMark: judged > 0 ? toward / judged : null };
 }
 
 export function judgeBehavior(s: WindowStats, cfg: DetectorConfig = defaultConfig): Behavior {
-  if (s.updates < cfg.minUpdates || s.towardMark == null) return "inconclusive";
+  // Markets whose mark is pinned to the oracle leave few judgeable updates; a
+  // handful of them must not decide the mode.
+  if (s.judged < cfg.minUpdates || s.judged * 2 < s.updates || s.towardMark == null) return "inconclusive";
   if (s.towardMark >= cfg.internalToward) return "internal";
   if (s.towardMark <= cfg.externalToward) return "external";
   return "inconclusive";
@@ -281,19 +289,24 @@ export function evaluate(
   const stats = windowStats(mem.window);
   const behavior = judgeBehavior(stats, cfg);
   const cal = calendarMode(session.phase);
-  const conflict = cal != null && behavior !== "inconclusive" && cal !== behavior;
+  // Right after a scheduled open or close the window still holds updates from
+  // before it, so a disagreement there is lag, not evidence against the calendar.
+  const disagree = cal != null && behavior !== "inconclusive" && cal !== behavior;
+  const conflict = disagree && !session.nearBoundary;
   const sinceChange = mem.lastOracleChangeTs == null ? null : now - mem.lastOracleChangeTs;
+  // Internal pricing goes quiet once the oracle has caught up with mark, so a
+  // silent oracle is only "stale" where an external feed is expected to be live.
   const isStale =
+    mem.mode === "external" && cal !== "internal" &&
     sinceChange != null && sinceChange >= cfg.staleMs && mem.markChangesSinceOracleChange >= cfg.staleMinMarkChanges;
 
   // Behavior is what the oracle is actually doing, so it wins over the schedule.
-  // Once behavior has contradicted a calendar phase, that phase is not trusted
-  // again on its own: a quiet few minutes must not flip the mode back.
   mem.conflictCount = conflict ? mem.conflictCount + 1 : 0;
-  if (conflict) mem.distrustedPhase = session.phase;
-  else if (behavior !== "inconclusive" || session.phase !== mem.distrustedPhase) mem.distrustedPhase = null;
-  const held = behavior === "inconclusive" && mem.distrustedPhase != null && mem.mode != null;
+  if (behavior !== "inconclusive" && !(disagree && session.nearBoundary)) mem.behaviorPhase = session.phase;
+  else if (session.phase !== mem.behaviorPhase) mem.behaviorPhase = null;
+  const held = behavior === "inconclusive" && mem.behaviorPhase != null && mem.mode != null;
   const mode: Mode | null = behavior !== "inconclusive" ? behavior : held ? mem.mode : cal;
+
   let state: State;
   let confidence: Confidence;
   if (isStale) {
@@ -307,7 +320,9 @@ export function evaluate(
     confidence = "none";
   } else {
     state = mode;
-    confidence = held ? "behavior" : behavior === "inconclusive" ? "calendar" : cal === behavior ? "both" : "behavior";
+    confidence = held
+      ? (cal === mode ? "calendar" : "behavior")
+      : behavior === "inconclusive" ? "calendar" : cal === behavior ? "both" : "behavior";
   }
   const warm = mem.firstTs != null && now - mem.firstTs >= cfg.windowMs;
 

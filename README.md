@@ -65,7 +65,7 @@ or its own internal pricing, so `detect` infers it from two kinds of evidence.
 | `external` | oracle is following an outside market |
 | `internal` | oracle is on the deployer's internal pricing |
 | `transition` | within ten minutes of a scheduled open or close, behavior not yet clear |
-| `stale` | no oracle update for 15 minutes while mark kept moving |
+| `stale` | an external feed is expected but the oracle has not moved for 5 minutes while mark kept moving |
 | `unknown` | no venue mapping and too few updates to judge |
 
 Every state carries a confidence: `both` when calendar and behavior agree,
@@ -81,13 +81,17 @@ row is flagged as a conflict, which usually means the calendar is wrong.
 | `oracle_stale` | the stale state begins |
 | `funding_extreme` | hourly funding reaches 0.05% in either direction |
 | `oi_cap_near` | open interest reaches 90% of the deployer's cap |
-| `calendar_conflict` | calendar and behavior disagree for two evaluations |
+| `calendar_conflict` | calendar and behavior disagree for two evaluations, away from a scheduled open or close |
 
 `detect` replays stored ticks through the same code that runs live, so it can be
 rerun over history; rows are keyed so a rerun does not duplicate them. It never
 evaluates past the last tick or across a collector outage.
 
-The behavior thresholds were set from a short sample on one US market holiday.
+Checked against one live capture so far: on 2026-11-26 the share of SKHX oracle
+updates moving toward mark went from about 0.45 to 0.99 at 20:00 Seoul time, and
+the replay reported the switch four and a half minutes later. The thresholds and
+the Korean evening session in the calendar both come from that same day, so this
+is an in-sample check, not a validation.
 Treat the output as an inference to be checked, not as a statement by the deployer.
 
 ## Data

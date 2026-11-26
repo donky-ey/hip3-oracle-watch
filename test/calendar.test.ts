@@ -25,7 +25,8 @@ test("daylight saving shifts the UTC open", () => {
 
 test("KRX session in UTC terms", () => {
   assert.equal(phaseAt("krx", at("2026-11-26T00:30:00Z")), "regular"); // 09:30 KST
-  assert.equal(phaseAt("krx", at("2026-11-26T07:00:00Z")), "closed"); // 16:00 KST
+  assert.equal(phaseAt("krx", at("2026-11-26T07:00:00Z")), "extended"); // 16:00 KST, evening venue
+  assert.equal(phaseAt("krx", at("2026-11-26T11:30:00Z")), "closed"); // 20:30 KST
 });
 
 test("continuous venues close for the weekend and the daily break", () => {
