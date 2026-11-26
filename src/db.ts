@@ -55,6 +55,12 @@ CREATE TABLE IF NOT EXISTS bars_1m (
   funding_close REAL NOT NULL,
   open_interest_close REAL NOT NULL,
   ticks INTEGER NOT NULL,
+  -- Oracle updates in the minute, how many happened while mark differed from
+  -- oracle, and how many of those moved toward mark. Kept so the regime can
+  -- still be read from history after the raw ticks are gone.
+  oracle_updates INTEGER NOT NULL DEFAULT 0,
+  judged_updates INTEGER NOT NULL DEFAULT 0,
+  toward_updates INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (coin, ts)
 ) WITHOUT ROWID;
 
@@ -134,6 +140,8 @@ WITH t AS (
          ts / ${MINUTE} * ${MINUTE} AS m,
          (mark / oracle - 1) * 10000 AS basis,
          abs(oracle / LAG(oracle) OVER (PARTITION BY coin ORDER BY ts) - 1) * 10000 AS step,
+         LAG(oracle) OVER (PARTITION BY coin ORDER BY ts) AS po,
+         LAG(mark) OVER (PARTITION BY coin ORDER BY ts) AS pm,
          ROW_NUMBER() OVER (PARTITION BY coin, ts / ${MINUTE} ORDER BY ts) AS first,
          ROW_NUMBER() OVER (PARTITION BY coin, ts / ${MINUTE} ORDER BY ts DESC) AS last
   FROM ticks WHERE ts >= ? AND ts < ? AND oracle > 0
@@ -145,7 +153,10 @@ SELECT coin, m,
        min(basis), max(basis), max(step),
        max(CASE WHEN last = 1 THEN funding END),
        max(CASE WHEN last = 1 THEN open_interest END),
-       count(*)
+       count(*),
+       coalesce(sum(oracle <> po), 0),
+       coalesce(sum(oracle <> po AND pm <> po), 0),
+       coalesce(sum(oracle <> po AND (oracle - po) * (pm - po) > 0), 0)
 FROM t GROUP BY coin, m`;
 
 export class Store {
@@ -157,6 +168,11 @@ export class Store {
     this.db = new DatabaseSync(path);
     this.db.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");
     this.db.exec(SCHEMA);
+    // Databases created before the update counters existed gain them here.
+    const cols = (this.db.prepare("PRAGMA table_info(bars_1m)").all() as { name: string }[]).map((c) => c.name);
+    for (const c of ["oracle_updates", "judged_updates", "toward_updates"]) {
+      if (!cols.includes(c)) this.db.exec(`ALTER TABLE bars_1m ADD COLUMN ${c} INTEGER NOT NULL DEFAULT 0`);
+    }
     this.insTick = this.db.prepare(
       `INSERT OR IGNORE INTO ticks
        (coin, ts, oracle, mark, mid, impact_bid, impact_ask, funding, open_interest, day_ntl_vlm, src)

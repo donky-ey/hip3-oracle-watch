@@ -84,6 +84,21 @@ a month. Without a volume the database is lost on every redeploy.
 
 The HTTP API has no authentication. Keep it private or put it behind a proxy.
 
+## Observed timetable
+
+```bash
+npm run schedule -- --db oracle-watch.db --days 7 > timetable.md
+```
+
+Builds, from stored history, a table of when each perp's oracle switched between
+behaving like an external feed and behaving like internal pricing, and which
+regime it showed at each time of day. Switches at the same time of day on
+different days are grouped, with a count of the days that back them up.
+
+This is what was observed, not what the calendar says. Slots without conclusive
+data are left out, and each row shows what the hand-compiled calendar expected at
+that moment so mismatches stand out. `--json` prints the same thing as JSON.
+
 ## Oracle state
 
 The API does not say whether the deployer's oracle is following an external market

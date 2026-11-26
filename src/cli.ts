@@ -10,6 +10,7 @@ import { Queries } from "./query.ts";
 import { startHttp } from "./http.ts";
 import { runStdio } from "./mcp.ts";
 import { dispatch, dispatchDefaults, loadConfig } from "./alerts.ts";
+import { buildSchedule, toMarkdown } from "./schedule.ts";
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
@@ -25,6 +26,8 @@ const { positionals, values } = parseArgs({
     port: { type: "string", default: "8787" },
     config: { type: "string", default: "alerts.json" },
     once: { type: "boolean", default: false },
+    days: { type: "string", default: "7" },
+    json: { type: "boolean", default: false },
     host: { type: "string", default: "127.0.0.1" },
     kind: { type: "string" },
     coin: { type: "string" },
@@ -230,6 +233,13 @@ if (cmd === "collect") {
     process.on("SIGINT", stop);
     process.on("SIGTERM", stop);
   }
+} else if (cmd === "schedule") {
+  // Prints the observed timetable as Markdown (or JSON) on stdout, ready to redirect into a file.
+  const store = new Store(values.db!);
+  const now = Date.now();
+  const sched = buildSchedule(store, await categoriesOrEmpty(), now - Number(values.days) * 86_400_000, now);
+  process.stdout.write(values.json ? JSON.stringify(sched, null, 2) + "\n" : toMarkdown(sched));
+  store.close();
 } else if (cmd === "mcp") {
   // stdout carries the protocol; nothing else may be printed there.
   await runStdio(new Queries(new Store(values.db!), await categoriesOrEmpty()));
@@ -240,6 +250,6 @@ if (cmd === "collect") {
   const s = sessionFor(coin, Date.now(), cats.get(coin));
   console.log(JSON.stringify({ ...s, next: s.next && { ...s.next, at: iso(s.next.ts) } }, null, 2));
 } else {
-  console.log("usage: cli.ts <run|collect|status|compact|detect|events|states|serve|mcp|alert|session <coin>> [--db path] [--dex xyz] [--poll-ms 5000] [--ws-top 40] [--hours 24] [--retention-days 7] [--vacuum] [--follow] [--kind k] [--coin c] [--port 8787] [--host 127.0.0.1] [--config alerts.json] [--once]");
+  console.log("usage: cli.ts <run|collect|status|compact|detect|events|states|serve|mcp|alert|schedule|session <coin>> [--db path] [--dex xyz] [--poll-ms 5000] [--ws-top 40] [--hours 24] [--retention-days 7] [--vacuum] [--follow] [--kind k] [--coin c] [--port 8787] [--host 127.0.0.1] [--config alerts.json] [--once] [--days 7] [--json]");
   process.exit(cmd ? 1 : 0);
 }

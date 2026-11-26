@@ -87,6 +87,10 @@ test("compact folds old ticks into one-minute bars and keeps recent ones", () =>
   assert.ok(Math.abs(b.basis_max_bp! - (103 / 102 - 1) * 1e4) < 1e-6);
   assert.ok(Math.abs(b.basis_min_bp! - (100 / 101 - 1) * 1e4) < 1e-6);
   assert.ok(Math.abs(b.oracle_max_step_bp! - 200) < 1e-6); // 100 -> 102
+  // 100 -> 102 with mark at 100 (not judged: mark equalled oracle), 102 -> 101 with mark at 103 (away).
+  assert.equal(b.oracle_updates, 2);
+  assert.equal(b.judged_updates, 1);
+  assert.equal(b.toward_updates, 0);
 
   const skhx = s.db.prepare("SELECT basis_min_bp FROM bars_1m WHERE coin = 'xyz:SKHX'").get() as { basis_min_bp: number };
   assert.ok(Math.abs(skhx.basis_min_bp + 125) < 1e-6);

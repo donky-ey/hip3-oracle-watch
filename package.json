@@ -18,6 +18,7 @@
     "serve": "tsx src/cli.ts serve",
     "mcp": "tsx src/cli.ts mcp",
     "alert": "tsx src/cli.ts alert",
+    "schedule": "tsx src/cli.ts schedule",
     "session": "tsx src/cli.ts session",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts"

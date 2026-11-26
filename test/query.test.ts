@@ -23,7 +23,7 @@ function fixture() {
     t("xyz:GOLD", NOW - 5_000, 3500, 3500.35),
   ]);
   store.db.prepare(
-    `INSERT INTO bars_1m VALUES ('xyz:NVDA', ?, 99, 99.5, 98.9, 99.2, 99.3, 99.9, 99.1, 99.4, 99.4, -5, 40, 12, 0.00002, 900, 30)`,
+    `INSERT INTO bars_1m VALUES ('xyz:NVDA', ?, 99, 99.5, 98.9, 99.2, 99.3, 99.9, 99.1, 99.4, 99.4, -5, 40, 12, 0.00002, 900, 30, 0, 0, 0)`,
   ).run(NOW - 60 * M);
   const st = store.db.prepare("INSERT INTO states VALUES (?, ?, ?, ?, ?, ?, ?, '{}')");
   st.run("xyz:NVDA", NOW - 30 * M, "external", "both", "regular", "external", 0);
