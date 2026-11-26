@@ -1,0 +1,16 @@
+{
+  "sinks": [
+    {
+      "name": "ops-webhook",
+      "type": "webhook",
+      "urlEnv": "ORACLE_WATCH_WEBHOOK_URL",
+      "kinds": ["mode_switch", "basis_breach", "oracle_jump", "oracle_stale"]
+    },
+    {
+      "name": "korea-telegram",
+      "type": "telegram",
+      "chatId": "-1000000000000",
+      "coins": ["xyz:SKHX", "xyz:SMSN", "xyz:HYUNDAI"]
+    }
+  ]
+}

@@ -3,8 +3,11 @@
 Watches oracle state and mark/oracle dislocations on Hyperliquid HIP-3 equity and
 commodity perps. Read-only: it places no orders and holds no keys.
 
-Status: week 3 of 4. The collector, detector, MCP server, HTTP API and status page
-exist. Alerts do not yet.
+Status: the collector, detector, MCP server, HTTP API, status page and alerts all
+exist. The detector has been checked against one evening of data only.
+
+First write-up: [At 20:00 Seoul time, the oracle for Korean stock perps changes
+character](docs/posts/2026-11-26-seoul-2000.md).
 
 ![Status page](docs/status-page.png)
 
@@ -48,8 +51,12 @@ npm run serve -- --db oracle-watch.db --port 8787
 npm run session -- xyz:NVDA
 ```
 
-Three processes share one database file: `collect` writes ticks, `detect --follow`
-writes states and events, and `serve` or `mcp` reads them.
+```bash
+npm run alert -- --db oracle-watch.db --config alerts.json
+```
+
+The processes share one database file: `collect` writes ticks, `detect --follow`
+writes states and events, `serve` and `mcp` read them, and `alert` sends events out.
 
 `collect` polls `metaAndAssetCtxs` for the whole dex every 5 seconds and follows the
 40 most traded coins over WebSocket (`activeAssetCtx`). A row is written only when
@@ -132,6 +139,26 @@ Every answer carries the observation time, the source, units, and a `health` blo
 saying whether the collector and detector are currently running, so a client can
 tell a quiet market from a stopped pipeline.
 
+## Alerts
+
+`alert` sends detector events to webhooks and Telegram. Copy `alerts.example.json`
+to `alerts.json` (git-ignored) and edit it. Each sink can be limited to some event
+kinds and some perps.
+
+Secrets stay out of the file. A Telegram bot token is read from
+`TELEGRAM_BOT_TOKEN`, and a webhook URL that embeds a token can be supplied through
+an environment variable named by `urlEnv`.
+
+The webhook body is JSON with `text` and `content` (the same readable summary, so
+Slack- and Discord-style endpoints both display it) and `event` (the raw fields).
+
+Delivery is recorded per event per sink. A failed send is retried on the next pass
+until the event is 30 minutes old; after that it is marked expired. So a restart
+neither repeats nor loses alerts, and replaying old history does not flood a
+channel. At most 20 messages go to one sink per ten-second pass.
+
+`--once` runs a single pass and exits.
+
 ## HTTP API
 
 `serve` binds to 127.0.0.1 by default and serves the status page at `/`. There is
@@ -157,6 +184,7 @@ SQLite, one file.
 | `bars_1m` | one-minute bars built from ticks older than the retention window |
 | `states` | detector output, one row per change of state, confidence or conflict |
 | `events` | detector events |
+| `deliveries` | which events have been sent to which alert sink |
 | `kv` | detector heartbeat |
 | `polls` | one row per successful full poll; coverage is measured here |
 | `dex_config` | `perpDexs` entry for the dex, stored when it changes |

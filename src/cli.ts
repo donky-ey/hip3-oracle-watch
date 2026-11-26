@@ -8,6 +8,7 @@ import { Runner, runnerDefaults } from "./runner.ts";
 import { Queries } from "./query.ts";
 import { startHttp } from "./http.ts";
 import { runStdio } from "./mcp.ts";
+import { dispatch, dispatchDefaults, loadConfig } from "./alerts.ts";
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
@@ -21,6 +22,8 @@ const { positionals, values } = parseArgs({
     vacuum: { type: "boolean", default: false },
     follow: { type: "boolean", default: false },
     port: { type: "string", default: "8787" },
+    config: { type: "string", default: "alerts.json" },
+    once: { type: "boolean", default: false },
     host: { type: "string", default: "127.0.0.1" },
     kind: { type: "string" },
     coin: { type: "string" },
@@ -154,6 +157,33 @@ if (cmd === "collect") {
   };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
+} else if (cmd === "alert") {
+  const store = new Store(values.db!);
+  const cfg = loadConfig(values.config!);
+  const log = (m: string) => console.log(`${iso(Date.now())} ${m}`);
+  const pass = async () => {
+    const r = await dispatch(store, cfg, Date.now(), { ...dispatchDefaults, log });
+    if (r.sent || r.failed || r.expired) log(`sent=${r.sent} failed=${r.failed} expired=${r.expired}`);
+  };
+  await pass();
+  if (values.once) {
+    store.close();
+  } else {
+    log(`watching for events, ${cfg.sinks.length} sink(s)`);
+    let busy = false;
+    const timer = setInterval(() => {
+      if (busy) return;
+      busy = true;
+      pass().catch((e: Error) => log(`alert pass failed: ${e.message}`)).finally(() => (busy = false));
+    }, 10_000);
+    const stop = () => {
+      clearInterval(timer);
+      store.close();
+      process.exit(0);
+    };
+    process.on("SIGINT", stop);
+    process.on("SIGTERM", stop);
+  }
 } else if (cmd === "mcp") {
   // stdout carries the protocol; nothing else may be printed there.
   await runStdio(new Queries(new Store(values.db!), await categoriesOrEmpty()));
@@ -164,6 +194,6 @@ if (cmd === "collect") {
   const s = sessionFor(coin, Date.now(), cats.get(coin));
   console.log(JSON.stringify({ ...s, next: s.next && { ...s.next, at: iso(s.next.ts) } }, null, 2));
 } else {
-  console.log("usage: cli.ts <collect|status|compact|detect|events|states|serve|mcp|session <coin>> [--db path] [--dex xyz] [--poll-ms 5000] [--ws-top 40] [--hours 24] [--retention-days 7] [--vacuum] [--follow] [--kind k] [--coin c] [--port 8787] [--host 127.0.0.1]");
+  console.log("usage: cli.ts <collect|status|compact|detect|events|states|serve|mcp|alert|session <coin>> [--db path] [--dex xyz] [--poll-ms 5000] [--ws-top 40] [--hours 24] [--retention-days 7] [--vacuum] [--follow] [--kind k] [--coin c] [--port 8787] [--host 127.0.0.1] [--config alerts.json] [--once]");
   process.exit(cmd ? 1 : 0);
 }

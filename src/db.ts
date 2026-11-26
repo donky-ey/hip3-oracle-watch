@@ -82,6 +82,17 @@ CREATE TABLE IF NOT EXISTS events (
   PRIMARY KEY (coin, kind, ts)
 ) WITHOUT ROWID;
 
+-- One row per event per sink once it has been sent or deliberately skipped.
+CREATE TABLE IF NOT EXISTS deliveries (
+  sink TEXT NOT NULL,
+  coin TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  ts INTEGER NOT NULL,
+  at INTEGER NOT NULL,
+  outcome TEXT NOT NULL,
+  PRIMARY KEY (sink, coin, kind, ts)
+) WITHOUT ROWID;
+
 CREATE TABLE IF NOT EXISTS kv (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
