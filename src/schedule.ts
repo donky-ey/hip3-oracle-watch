@@ -3,7 +3,7 @@
 // what was observed, with how many days back it up, and never fills gaps from the
 // calendar.
 
-import type { Store } from "./db.ts";
+import { MIN_GAP_BP, type Store } from "./db.ts";
 import { phaseAt, toLocal, venueFor, venues } from "./calendar.ts";
 
 export const BUCKET_MS = 5 * 60_000;
@@ -45,8 +45,8 @@ export function loadBuckets(store: Store, from: number, to: number): Bucket[] {
        )
        SELECT coin, ts / ${BUCKET_MS} * ${BUCKET_MS} AS ts,
               sum(oracle <> po) AS updates,
-              sum(oracle <> po AND pm <> po) AS judged,
-              sum(oracle <> po AND (oracle - po) * (pm - po) > 0) AS toward
+              sum(oracle <> po AND abs(pm / po - 1) * 10000 >= ${MIN_GAP_BP}) AS judged,
+              sum(oracle <> po AND abs(pm / po - 1) * 10000 >= ${MIN_GAP_BP} AND (oracle - po) * (pm - po) > 0) AS toward
        FROM t WHERE po IS NOT NULL GROUP BY coin, 2`,
     )
     .all(from, to) as unknown as Bucket[];

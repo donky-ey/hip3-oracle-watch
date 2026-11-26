@@ -129,6 +129,8 @@ export interface CompactResult {
 }
 
 const MINUTE = 60_000;
+/** Same floor as DetectorConfig.minGapBp: below it the direction of an oracle update is not judged. */
+export const MIN_GAP_BP = 2;
 
 // Rows are ranked inside each (coin, minute) so open and close can be picked
 // without a self-join. The step is taken against the previous tick of the same
@@ -155,8 +157,8 @@ SELECT coin, m,
        max(CASE WHEN last = 1 THEN open_interest END),
        count(*),
        coalesce(sum(oracle <> po), 0),
-       coalesce(sum(oracle <> po AND pm <> po), 0),
-       coalesce(sum(oracle <> po AND (oracle - po) * (pm - po) > 0), 0)
+       coalesce(sum(oracle <> po AND abs(pm / po - 1) * 10000 >= ${MIN_GAP_BP}), 0),
+       coalesce(sum(oracle <> po AND abs(pm / po - 1) * 10000 >= ${MIN_GAP_BP} AND (oracle - po) * (pm - po) > 0), 0)
 FROM t GROUP BY coin, m`;
 
 export class Store {

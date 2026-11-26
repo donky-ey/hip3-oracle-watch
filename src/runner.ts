@@ -91,7 +91,7 @@ export class Runner {
     }
   }
 
-  /** Process every settled tick up to `now`. Returns the events found in this pass. */
+  /** Process every settled tick up to `now`. Returns the events from this pass that were not already stored. */
   advance(now: number): DetectorEvent[] {
     const until = now - this.opts.settleMs;
     const sink = { states: [] as OracleState[], events: [] as DetectorEvent[] };
@@ -120,14 +120,16 @@ export class Runner {
       this.nextEval += this.opts.evalMs;
     }
     this.cursor = Math.max(this.cursor, until);
-    this.persist(sink);
+    const fresh = this.persist(sink);
     // Lets readers tell a quiet market from a detector that is not running.
     this.store.setKv("detector_last_run", String(now));
-    return sink.events;
+    return fresh;
   }
 
-  private persist(sink: { states: OracleState[]; events: DetectorEvent[] }): void {
-    if (sink.states.length === 0 && sink.events.length === 0) return;
+  /** Stores the pass and returns the events that were not already in the store. */
+  private persist(sink: { states: OracleState[]; events: DetectorEvent[] }): DetectorEvent[] {
+    const fresh: DetectorEvent[] = [];
+    if (sink.states.length === 0 && sink.events.length === 0) return fresh;
     const db = this.store.db;
     // OR IGNORE keeps a re-run over the same history from duplicating rows.
     const insS = db.prepare(
@@ -142,9 +144,11 @@ export class Runner {
         );
       }
       for (const e of sink.events) {
-        this.counts.events += Number(insE.run(e.coin, e.ts, e.kind, JSON.stringify(e.detail)).changes);
+        if (Number(insE.run(e.coin, e.ts, e.kind, JSON.stringify(e.detail)).changes) > 0) fresh.push(e);
       }
+      this.counts.events += fresh.length;
       db.exec("COMMIT");
+      return fresh;
     } catch (e) {
       db.exec("ROLLBACK");
       throw e;

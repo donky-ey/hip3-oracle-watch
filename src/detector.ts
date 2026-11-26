@@ -22,6 +22,12 @@ export interface DetectorConfig {
   internalToward: number;
   /** Share at or below which pricing looks external. */
   externalToward: number;
+  /**
+   * Mark must be at least this far from oracle, in basis points, for an update
+   * to say anything about direction. Closer than that the sign of the gap is
+   * tick noise, and a market whose mark sits on its oracle looks falsely internal.
+   */
+  minGapBp: number;
   staleMs: number;
   staleMinMarkChanges: number;
   /** Consecutive evaluations a new mode must hold before a switch is declared. */
@@ -44,6 +50,7 @@ export const defaultConfig: DetectorConfig = {
   minUpdates: 6,
   internalToward: 0.9,
   externalToward: 0.7,
+  minGapBp: 2,
   staleMs: 5 * 60_000,
   staleMinMarkChanges: 5,
   switchConfirmations: 2,
@@ -212,13 +219,13 @@ export function resetAfterGap(mem: CoinMemory): void {
 
 export interface WindowStats {
   updates: number;
-  /** Updates made while mark differed from oracle; only these say anything about direction. */
+  /** Updates made while mark was at least minGapBp from oracle; only these say anything about direction. */
   judged: number;
   /** Of the updates made while mark differed from oracle, the share that moved toward mark. */
   towardMark: number | null;
 }
 
-export function windowStats(window: DTick[]): WindowStats {
+export function windowStats(window: DTick[], minGapBp = defaultConfig.minGapBp): WindowStats {
   let updates = 0;
   let judged = 0;
   let toward = 0;
@@ -227,7 +234,7 @@ export function windowStats(window: DTick[]): WindowStats {
     const b = window[i]!;
     if (b.oracle === a.oracle) continue;
     updates++;
-    if (a.mark === a.oracle) continue;
+    if (Math.abs(a.mark / a.oracle - 1) * 10_000 < minGapBp) continue;
     judged++;
     if ((b.oracle - a.oracle) * (a.mark - a.oracle) > 0) toward++;
   }
@@ -286,7 +293,7 @@ export function evaluate(
     };
   }
 
-  const stats = windowStats(mem.window);
+  const stats = windowStats(mem.window, cfg.minGapBp);
   const behavior = judgeBehavior(stats, cfg);
   const cal = calendarMode(session.phase);
   // Right after a scheduled open or close the window still holds updates from

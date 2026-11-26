@@ -30,7 +30,7 @@ function feedExternal(mem: CoinMemory, from: number, n: number, start = 100): nu
   let o = start;
   for (let i = 0; i < n; i++) {
     o += steps[i % steps.length]!;
-    observe(mem, "c", tick(from + i * 5 * S, o, o + 0.02));
+    observe(mem, "c", tick(from + i * 5 * S, o, o + 0.05));
   }
   return o;
 }
@@ -245,7 +245,7 @@ test("runner does not evaluate past the data or across a collector outage", () =
   const store = new Store(":memory:");
   const base = Date.parse("2026-11-24T15:00:00Z");
   const raw = (o: number, ts: number) => toTick("xyz:NVDA", {
-    funding: "0.00001", openInterest: "10", oraclePx: String(o), markPx: String(o + 0.02),
+    funding: "0.00001", openInterest: "10", oraclePx: String(o), markPx: String(o + 0.05),
     midPx: null, impactPxs: null, premium: null, dayNtlVlm: "1",
   }, ts, "poll");
   const a = newMemory();
@@ -284,4 +284,36 @@ test("at a scheduled close, lagging behavior is not a conflict and the calendar 
   assert.ok(seen.includes("transition"));
   assert.equal(seen.at(-1), "internal");
   assert.deepEqual(kinds.filter((k) => k === "mode_switch"), ["mode_switch"]);
+});
+
+test("a mark that sits within a tick of the oracle gives no direction to judge", () => {
+  // Shape of xyz:SP500 on 2026-11-26: frequent updates, basis around 0.1 bp.
+  const m = newMemory();
+  let o = 7222;
+  for (let i = 0; i < 60; i++) {
+    o += i % 3 === 0 ? -0.1 : 0.1;
+    observe(m, "c", tick(i * 5 * S, o, o + 0.1)); // about 0.14 bp above, always "toward"
+  }
+  const s = windowStats(m.window);
+  assert.equal(s.updates, 59);
+  assert.equal(s.judged, 0);
+  const r = evaluate(m, { coin: "c", now: 300 * S, session: open });
+  assert.equal(r.state.behavior, "inconclusive");
+  assert.equal(r.state.state, "external");
+  assert.equal(r.state.confidence, "calendar");
+});
+
+test("runner returns only events that are new to the store", () => {
+  const store = new Store(":memory:");
+  const base = Date.parse("2026-11-24T15:00:00Z");
+  store.writeTicks([0, 5].map((s) => toTick("xyz:NVDA", {
+    funding: "0.0009", openInterest: "10", oraclePx: String(100 + s), markPx: String(100 + s),
+    midPx: null, impactPxs: null, premium: null, dayNtlVlm: "1",
+  }, base + s * 1000, "poll")));
+  const opts = { ...runnerDefaults, categories: new Map([["xyz:NVDA", "stocks"]]) };
+  const first = new Runner(store, opts, base - S).advance(base + 120 * S);
+  assert.deepEqual(first.map((e) => e.kind).sort(), ["funding_extreme", "oracle_jump"]);
+  const again = new Runner(store, opts, base - S).advance(base + 120 * S); // a restart replaying the same history
+  assert.deepEqual(again, []);
+  store.close();
 });
