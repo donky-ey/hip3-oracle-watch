@@ -23,6 +23,10 @@ npm run status -- --db oracle-watch.db --hours 24
 ```
 
 ```bash
+npm run compact -- --db oracle-watch.db --retention-days 7 --vacuum
+```
+
+```bash
 npm run session -- xyz:NVDA
 ```
 
@@ -41,9 +45,27 @@ SQLite, one file.
 | Table | Contents |
 |---|---|
 | `ticks` | coin, time, oracle, mark, mid, impact prices, funding, open interest, source |
+| `bars_1m` | one-minute bars built from ticks older than the retention window |
 | `polls` | one row per successful full poll; coverage is measured here |
 | `dex_config` | `perpDexs` entry for the dex, stored when it changes |
 | `ws_events` | socket opens and closes |
+
+## Retention
+
+Raw ticks are kept for 7 days (`--retention-days`). Older ticks are folded into
+`bars_1m` and deleted. The collector does this at start-up and then hourly;
+`compact` does it on demand. Each bar keeps oracle and mark open/high/low/close,
+the minimum and maximum basis in basis points, the largest single oracle step, and
+closing funding and open interest. Poll records are kept for 90 days.
+
+Measured on a 6.6 million tick backlog: 56 seconds, 690 MB down to 61 MB after
+`--vacuum`. Deleting rows does not shrink the file by itself; SQLite reuses the
+freed pages, so the file stops growing once it reaches its steady size. Pass
+`--vacuum` to hand the space back, and stop the collector first because it
+rewrites the whole file.
+
+Rough sizing at 150 coins: about 370 MB per day of raw ticks and up to 33 MB per
+day of bars.
 
 ## Calendar caveat
 

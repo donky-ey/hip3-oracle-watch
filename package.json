@@ -8,6 +8,7 @@
   "scripts": {
     "collect": "tsx src/cli.ts collect",
     "status": "tsx src/cli.ts status",
+    "compact": "tsx src/cli.ts compact",
     "session": "tsx src/cli.ts session",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts"

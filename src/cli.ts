@@ -13,6 +13,8 @@ const { positionals, values } = parseArgs({
     "poll-ms": { type: "string", default: String(defaults.pollMs) },
     "ws-top": { type: "string", default: String(defaults.wsTopN) },
     hours: { type: "string", default: "24" },
+    "retention-days": { type: "string", default: String(defaults.retentionDays) },
+    vacuum: { type: "boolean", default: false },
   },
 });
 const cmd = positionals[0];
@@ -25,6 +27,7 @@ if (cmd === "collect") {
     dbPath: values.db!,
     pollMs: Number(values["poll-ms"]),
     wsTopN: Number(values["ws-top"]),
+    retentionDays: Number(values["retention-days"]),
   });
   const stop = () => {
     c.stop();
@@ -46,6 +49,19 @@ if (cmd === "collect") {
   console.log(`gaps       ${cov.gaps.length} totalling ${cov.gapSeconds}s` + (span > 0 ? ` (${((cov.gapSeconds / span) * 100).toFixed(2)}% of window)` : ""));
   for (const g of cov.gaps.slice(0, 20)) console.log(`  ${iso(g.from)} .. ${iso(g.to)}  ${g.seconds}s`);
   store.close();
+} else if (cmd === "compact") {
+  const store = new Store(values.db!);
+  const day = 86_400_000;
+  const r = store.compact(Date.now(), Number(values["retention-days"]) * day, defaults.pollRetentionDays * day);
+  console.log(`cutoff     ${iso(r.cutoff)}`);
+  console.log(`ticks      ${r.ticksRemoved} removed`);
+  console.log(`bars       ${r.barsWritten} written`);
+  console.log(`polls      ${r.pollsRemoved} removed`);
+  if (values.vacuum) {
+    store.vacuum();
+    console.log("vacuumed");
+  }
+  store.close();
 } else if (cmd === "session") {
   const coin = positionals[1];
   if (!coin) throw new Error("usage: session <coin>, e.g. session xyz:NVDA");
@@ -53,6 +69,6 @@ if (cmd === "collect") {
   const s = sessionFor(coin, Date.now(), cats.get(coin));
   console.log(JSON.stringify({ ...s, next: s.next && { ...s.next, at: iso(s.next.ts) } }, null, 2));
 } else {
-  console.log("usage: cli.ts <collect|status|session <coin>> [--db path] [--dex xyz] [--poll-ms 5000] [--ws-top 40] [--hours 24]");
+  console.log("usage: cli.ts <collect|status|compact|session <coin>> [--db path] [--dex xyz] [--poll-ms 5000] [--ws-top 40] [--hours 24] [--retention-days 7] [--vacuum]");
   process.exit(cmd ? 1 : 0);
 }

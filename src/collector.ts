@@ -11,6 +11,11 @@ export interface CollectorOptions {
   /** Number of coins, ranked by 24h notional volume, to follow over WebSocket. 0 disables the socket. */
   wsTopN: number;
   configPollMs: number;
+  /** Raw ticks older than this are folded into one-minute bars. */
+  retentionDays: number;
+  /** Poll records (used for coverage reports) older than this are dropped. */
+  pollRetentionDays: number;
+  compactEveryMs: number;
   log: (msg: string) => void;
 }
 
@@ -20,6 +25,9 @@ export const defaults: CollectorOptions = {
   pollMs: 5_000,
   wsTopN: 40,
   configPollMs: 600_000,
+  retentionDays: 7,
+  pollRetentionDays: 90,
+  compactEveryMs: 3_600_000,
   log: (m) => console.log(`${new Date().toISOString()} ${m}`),
 };
 
@@ -58,6 +66,8 @@ export class Collector {
     }
     this.timers.push(setInterval(() => void this.pollOnce(), this.opts.pollMs));
     this.timers.push(setInterval(() => void this.pollConfig(), this.opts.configPollMs));
+    this.compact();
+    this.timers.push(setInterval(() => this.compact(), this.opts.compactEveryMs));
     this.timers.push(
       setInterval(() => {
         const s = this.stats;
@@ -72,6 +82,17 @@ export class Collector {
     for (const t of this.timers) clearInterval(t);
     this.ws?.terminate();
     this.store.close();
+  }
+
+  private compact(): void {
+    if (this.stopped) return;
+    try {
+      const day = 86_400_000;
+      const r = this.store.compact(Date.now(), this.opts.retentionDays * day, this.opts.pollRetentionDays * day);
+      if (r.ticksRemoved > 0) this.opts.log(`compacted ${r.ticksRemoved} ticks into ${r.barsWritten} one-minute bars`);
+    } catch (e) {
+      this.opts.log(`compaction failed: ${(e as Error).message}`);
+    }
   }
 
   /** One full snapshot of the dex. Returns coins ranked by 24h notional volume, or null on failure. */

@@ -34,6 +34,32 @@ CREATE TABLE IF NOT EXISTS dex_config (
   PRIMARY KEY (dex, ts)
 );
 
+-- One-minute bars built from raw ticks once they age past the retention window.
+-- Basis is (mark / oracle - 1) in basis points. oracle_max_step_bp is the largest
+-- single oracle update inside the minute, which is what the jump detector reads.
+CREATE TABLE IF NOT EXISTS bars_1m (
+  coin TEXT NOT NULL,
+  ts INTEGER NOT NULL,
+  oracle_open REAL NOT NULL,
+  oracle_high REAL NOT NULL,
+  oracle_low REAL NOT NULL,
+  oracle_close REAL NOT NULL,
+  mark_open REAL NOT NULL,
+  mark_high REAL NOT NULL,
+  mark_low REAL NOT NULL,
+  mark_close REAL NOT NULL,
+  mid_close REAL,
+  basis_min_bp REAL NOT NULL,
+  basis_max_bp REAL NOT NULL,
+  oracle_max_step_bp REAL,
+  funding_close REAL NOT NULL,
+  open_interest_close REAL NOT NULL,
+  ticks INTEGER NOT NULL,
+  PRIMARY KEY (coin, ts)
+) WITHOUT ROWID;
+
+CREATE INDEX IF NOT EXISTS ticks_ts ON ticks (ts);
+
 CREATE TABLE IF NOT EXISTS ws_events (
   ts INTEGER NOT NULL,
   kind TEXT NOT NULL,
@@ -50,6 +76,39 @@ export interface Coverage {
   ticks: number;
   coins: number;
 }
+
+export interface CompactResult {
+  ticksRemoved: number;
+  barsWritten: number;
+  pollsRemoved: number;
+  cutoff: number;
+}
+
+const MINUTE = 60_000;
+
+// Rows are ranked inside each (coin, minute) so open and close can be picked
+// without a self-join. The step is taken against the previous tick of the same
+// coin within the chunk, so the first tick of a chunk has no step.
+const COMPACT_SQL = `
+INSERT OR REPLACE INTO bars_1m
+WITH t AS (
+  SELECT coin, ts, oracle, mark, mid, funding, open_interest,
+         ts / ${MINUTE} * ${MINUTE} AS m,
+         (mark / oracle - 1) * 10000 AS basis,
+         abs(oracle / LAG(oracle) OVER (PARTITION BY coin ORDER BY ts) - 1) * 10000 AS step,
+         ROW_NUMBER() OVER (PARTITION BY coin, ts / ${MINUTE} ORDER BY ts) AS first,
+         ROW_NUMBER() OVER (PARTITION BY coin, ts / ${MINUTE} ORDER BY ts DESC) AS last
+  FROM ticks WHERE ts >= ? AND ts < ? AND oracle > 0
+)
+SELECT coin, m,
+       max(CASE WHEN first = 1 THEN oracle END), max(oracle), min(oracle), max(CASE WHEN last = 1 THEN oracle END),
+       max(CASE WHEN first = 1 THEN mark END), max(mark), min(mark), max(CASE WHEN last = 1 THEN mark END),
+       max(CASE WHEN last = 1 THEN mid END),
+       min(basis), max(basis), max(step),
+       max(CASE WHEN last = 1 THEN funding END),
+       max(CASE WHEN last = 1 THEN open_interest END),
+       count(*)
+FROM t GROUP BY coin, m`;
 
 export class Store {
   readonly db: DatabaseSync;
@@ -126,6 +185,41 @@ export class Store {
       ticks: agg.n,
       coins: agg.c,
     };
+  }
+
+  /**
+   * Folds raw ticks older than `retentionMs` into one-minute bars and deletes them.
+   * Works in `chunkMs` slices, each in its own transaction, so a first run over a
+   * large backlog neither holds one huge transaction nor loses progress if stopped.
+   * The cutoff is minute-aligned, so a minute is never split across two runs.
+   */
+  compact(now: number, retentionMs: number, pollRetentionMs: number, chunkMs = 6 * 3_600_000): CompactResult {
+    const cutoff = Math.floor((now - retentionMs) / MINUTE) * MINUTE;
+    const res: CompactResult = { ticksRemoved: 0, barsWritten: 0, pollsRemoved: 0, cutoff };
+    const oldest = (this.db.prepare("SELECT min(ts) AS t FROM ticks").get() as { t: number | null }).t;
+    if (oldest != null && oldest < cutoff) {
+      const ins = this.db.prepare(COMPACT_SQL);
+      const del = this.db.prepare("DELETE FROM ticks WHERE ts >= ? AND ts < ?");
+      for (let from = Math.floor(oldest / MINUTE) * MINUTE; from < cutoff; from += chunkMs) {
+        const to = Math.min(from + chunkMs, cutoff);
+        this.db.exec("BEGIN");
+        try {
+          res.barsWritten += Number(ins.run(from, to).changes);
+          res.ticksRemoved += Number(del.run(from, to).changes);
+          this.db.exec("COMMIT");
+        } catch (e) {
+          this.db.exec("ROLLBACK");
+          throw e;
+        }
+      }
+    }
+    res.pollsRemoved = Number(this.db.prepare("DELETE FROM polls WHERE ts < ?").run(now - pollRetentionMs).changes);
+    return res;
+  }
+
+  /** Returns freed pages to the filesystem. Rewrites the whole file, so run it rarely. */
+  vacuum(): void {
+    this.db.exec("PRAGMA wal_checkpoint(TRUNCATE); VACUUM;");
   }
 
   close(): void {
