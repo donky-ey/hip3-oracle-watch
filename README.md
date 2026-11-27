@@ -211,6 +211,7 @@ channel. At most 20 messages go to one sink per ten-second pass.
 no authentication; put it behind a reverse proxy before exposing it.
 
 Front-end guide with response shapes and a Next.js example: [docs/api.md](docs/api.md).
+Design brief for the front end: [docs/web-design.md](docs/web-design.md).
 
 | Route | Parameters |
 |---|---|
