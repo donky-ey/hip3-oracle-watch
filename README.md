@@ -112,6 +112,15 @@ This is what was observed, not what the calendar says. Slots without conclusive
 data are left out, and each row shows what the hand-compiled calendar expected at
 that moment so mismatches stand out. `--json` prints the same thing as JSON.
 
+```bash
+npm run buckets -- --db oracle-watch.db --days 2 > buckets.csv
+```
+
+`buckets` prints the counts behind the timetable as CSV: per perp and five-minute
+bucket, the number of oracle updates, how many could be judged, and how many
+moved toward mark. It is a compact way to share a day of behaviour for tuning
+without sending the database.
+
 ## Oracle state
 
 The API does not say whether the deployer's oracle is following an external market

@@ -24,6 +24,7 @@
     "mcp": "tsx apps/server/src/cli.ts mcp",
     "alert": "tsx apps/server/src/cli.ts alert",
     "schedule": "tsx apps/server/src/cli.ts schedule",
+    "buckets": "tsx apps/server/src/cli.ts buckets",
     "session": "tsx apps/server/src/cli.ts session",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm test --workspaces --if-present"

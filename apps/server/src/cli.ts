@@ -10,7 +10,7 @@ import { Queries } from "./query.ts";
 import { startHttp } from "./http.ts";
 import { runStdio } from "./mcp.ts";
 import { dispatch, dispatchDefaults, loadConfig } from "./alerts.ts";
-import { buildSchedule, toMarkdown } from "./schedule.ts";
+import { buildSchedule, loadBuckets, toMarkdown } from "./schedule.ts";
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
@@ -241,6 +241,16 @@ if (cmd === "collect") {
   const sched = buildSchedule(store, await categoriesOrEmpty(), now - Number(values.days) * 86_400_000, now);
   process.stdout.write(values.json ? JSON.stringify(sched, null, 2) + "\n" : toMarkdown(sched));
   store.close();
+} else if (cmd === "buckets") {
+  // Raw material behind the timetable, as CSV on stdout: per perp and five-minute
+  // bucket, how many oracle updates there were and how many moved toward mark.
+  // Small enough to share for tuning thresholds without sending the database.
+  const store = new Store(values.db!);
+  const now = Date.now();
+  const rows = loadBuckets(store, now - Number(values.days) * 86_400_000, now);
+  process.stdout.write("coin,bucket_start_utc,oracle_updates,judged_updates,toward_updates\n");
+  for (const b of rows) process.stdout.write(`${b.coin},${iso(b.ts)},${b.updates},${b.judged},${b.toward}\n`);
+  store.close();
 } else if (cmd === "mcp") {
   // stdout carries the protocol; nothing else may be printed there.
   await runStdio(new Queries(new Store(values.db!), await categoriesOrEmpty()));
@@ -251,6 +261,6 @@ if (cmd === "collect") {
   const s = sessionFor(coin, Date.now(), cats.get(coin));
   console.log(JSON.stringify({ ...s, next: s.next && { ...s.next, at: iso(s.next.ts) } }, null, 2));
 } else {
-  console.log("usage: cli.ts <run|collect|status|compact|detect|events|states|serve|mcp|alert|schedule|session <coin>> [--db path] [--dex xyz] [--poll-ms 5000] [--ws-top 40] [--hours 24] [--retention-days 7] [--vacuum] [--follow] [--kind k] [--coin c] [--port 8787] [--host 127.0.0.1] [--cors-origin *] [--config alerts.json] [--once] [--days 7] [--json]");
+  console.log("usage: cli.ts <run|collect|status|compact|detect|events|states|serve|mcp|alert|schedule|buckets|session <coin>> [--db path] [--dex xyz] [--poll-ms 5000] [--ws-top 40] [--hours 24] [--retention-days 7] [--vacuum] [--follow] [--kind k] [--coin c] [--port 8787] [--host 127.0.0.1] [--cors-origin *] [--config alerts.json] [--once] [--days 7] [--json]");
   process.exit(cmd ? 1 : 0);
 }
