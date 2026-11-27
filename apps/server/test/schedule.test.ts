@@ -23,11 +23,12 @@ test("findSwitches needs both regimes established and ignores gaps and blips", (
   const int = (i: number) => bk(i * B, 20, 20, 20);
   const none = (i: number) => bk(i * B, 1, 1, 1);
   assert.deepEqual(findSwitches([ext(0), ext(1), ext(2), int(3), int(4), int(5)]), [{ coin: "c", ts: 3 * B, from: "external", to: "internal" }]);
-  assert.deepEqual(findSwitches([ext(0), ext(1), int(2), ext(3), ext(4)]), []); // one-bucket blip
-  assert.deepEqual(findSwitches([ext(0), ext(1), none(2), none(3), int(4), int(5)]).map((s) => s.ts), [4 * B]);
-  assert.deepEqual(findSwitches([int(0), int(1)]), []); // nothing to switch from
-  assert.deepEqual(findSwitches([ext(0), ext(1), int(20), int(21)]), []); // 90-minute hole in between
-  assert.equal(findSwitches([ext(0), ext(1), int(2), int(3), ext(4), ext(5)]).length, 2);
+  assert.deepEqual(findSwitches([ext(0), ext(1), ext(2), int(3), int(4), ext(5), ext(6), ext(7)]), []); // two-bucket blip
+  assert.deepEqual(findSwitches([ext(0), ext(1), ext(2), none(3), none(4), int(5), int(6), int(7)]).map((s) => s.ts), [5 * B]);
+  assert.deepEqual(findSwitches([int(0), int(1), int(2)]), []); // nothing to switch from
+  assert.deepEqual(findSwitches([ext(0), ext(1), ext(2), int(20), int(21), int(22)]), []); // 90-minute hole in between
+  assert.equal(findSwitches([ext(0), ext(1), ext(2), int(3), int(4), int(5), ext(6), ext(7), ext(8)]).length, 2);
+  assert.equal(findSwitches([ext(0), ext(1), int(2), int(3), ext(4), ext(5)], 2).length, 2); // the old, twitchier setting
 });
 
 test("ranges merges adjacent half-hour slots and wraps midnight", () => {

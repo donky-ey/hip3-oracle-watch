@@ -76,11 +76,13 @@ export interface Switch {
 
 /**
  * Switches within one coin's buckets. A switch needs `confirm` consecutive
+ * (three by default: on a full day of data two let through about a quarter more
+ * switches, nearly all of them single thinly traded perps flickering)
  * conclusive buckets of the new regime, and the old regime must itself have
  * been established the same way. Buckets more than `maxGapMs` apart are not
  * joined, so a collector outage never produces a switch.
  */
-export function findSwitches(buckets: Bucket[], confirm = 2, maxGapMs = 30 * 60_000): Switch[] {
+export function findSwitches(buckets: Bucket[], confirm = 3, maxGapMs = 30 * 60_000): Switch[] {
   const out: Switch[] = [];
   let current: Regime | null = null;
   let run = null as { regime: Regime; start: number; n: number } | null;

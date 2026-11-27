@@ -8,14 +8,19 @@ test("US equity regular, extended and closed phases", () => {
   assert.equal(phaseAt("us_equity", at("2026-11-24T15:00:00Z")), "regular"); // 10:00 ET Tue
   assert.equal(phaseAt("us_equity", at("2026-11-24T10:00:00Z")), "extended"); // 05:00 ET
   assert.equal(phaseAt("us_equity", at("2026-11-24T22:00:00Z")), "extended"); // 17:00 ET
-  assert.equal(phaseAt("us_equity", at("2026-11-25T03:00:00Z")), "closed"); // 22:00 ET
+  assert.equal(phaseAt("us_equity", at("2026-11-25T03:00:00Z")), "extended"); // 22:00 ET, overnight session
+  assert.equal(phaseAt("us_equity", at("2026-11-28T02:00:00Z")), "closed"); // Friday 21:00 ET, week over
+  assert.equal(phaseAt("us_equity", at("2026-11-29T23:00:00Z")), "closed"); // Sunday 18:00 ET
+  assert.equal(phaseAt("us_equity", at("2026-11-30T02:00:00Z")), "extended"); // Sunday 21:00 ET
   assert.equal(phaseAt("us_equity", at("2026-11-28T15:00:00Z")), "closed"); // Saturday
 });
 
 test("US holiday and early close", () => {
   assert.equal(phaseAt("us_equity", at("2026-11-26T15:00:00Z")), "closed"); // Thanksgiving
   assert.equal(phaseAt("us_equity", at("2026-11-27T17:00:00Z")), "regular"); // 12:00 ET
-  assert.equal(phaseAt("us_equity", at("2026-11-27T19:00:00Z")), "closed"); // 14:00 ET, after 13:00 close
+  assert.equal(phaseAt("us_equity", at("2026-11-27T19:00:00Z")), "extended"); // 14:00 ET, after 13:00 close
+  assert.equal(phaseAt("us_equity", at("2026-11-27T00:30:00Z")), "closed"); // Thanksgiving 19:30 ET
+  assert.equal(phaseAt("us_equity", at("2026-11-27T01:30:00Z")), "extended"); // Thanksgiving 20:30 ET, trading resumes
 });
 
 test("daylight saving shifts the UTC open", () => {
@@ -27,6 +32,11 @@ test("KRX session in UTC terms", () => {
   assert.equal(phaseAt("krx", at("2026-11-26T00:30:00Z")), "regular"); // 09:30 KST
   assert.equal(phaseAt("krx", at("2026-11-26T07:00:00Z")), "extended"); // 16:00 KST, evening venue
   assert.equal(phaseAt("krx", at("2026-11-26T11:30:00Z")), "closed"); // 20:30 KST
+  assert.equal(phaseAt("krx", at("2026-11-26T06:30:00Z")), "closed"); // 15:30 KST, between the close and the evening session
+  assert.equal(phaseAt("krx", at("2026-11-25T23:30:00Z")), "closed"); // 08:30 KST, no pre-market seen
+  assert.equal(phaseAt("sse", at("2026-11-27T04:00:00Z")), "closed"); // 12:00 Shanghai, lunch
+  assert.equal(phaseAt("sse", at("2026-11-27T05:30:00Z")), "extended"); // 13:30, afternoon session
+  assert.equal(phaseAt("krx_futures", at("2026-11-26T15:00:00Z")), "extended"); // 00:00 KST Friday, night session
 });
 
 test("continuous venues close for the weekend and the daily break", () => {
@@ -44,7 +54,10 @@ test("nextChange finds the following boundary", () => {
 test("venue mapping and unknown tickers", () => {
   assert.equal(venueFor("xyz:NVDA", "stocks"), "us_equity");
   assert.equal(venueFor("xyz:SKHX", "stocks"), "krx");
-  assert.equal(venueFor("xyz:ANT", "stocks"), null);
+  assert.equal(venueFor("xyz:ANT", "stocks"), "us_equity");
+  assert.equal(venueFor("xyz:CXMT", "stocks"), "sse");
+  assert.equal(venueFor("xyz:KR200", "indices"), "krx_futures");
+  assert.equal(venueFor("xyz:OURA", "preipo"), null);
   assert.equal(venueFor("xyz:NEWLISTING"), null);
-  assert.equal(sessionFor("xyz:ANT", Date.now(), "stocks").phase, "unknown");
+  assert.equal(sessionFor("xyz:OURA", Date.now(), "preipo").phase, "unknown");
 });

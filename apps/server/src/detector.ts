@@ -32,6 +32,12 @@ export interface DetectorConfig {
   staleMinMarkChanges: number;
   /** Consecutive evaluations a new mode must hold before a switch is declared. */
   switchConfirmations: number;
+  /**
+   * Confirmations required when the calendar does not expect the new mode. A real
+   * unscheduled change (a holiday halt, a wrong calendar) persists; a thinly
+   * traded market that happens to look like the other mode for a minute does not.
+   */
+  unexpectedConfirmations: number;
   basisBreachBp: number;
   basisBreachZ: number;
   basisBreachHoldMs: number;
@@ -54,6 +60,7 @@ export const defaultConfig: DetectorConfig = {
   staleMs: 5 * 60_000,
   staleMinMarkChanges: 5,
   switchConfirmations: 2,
+  unexpectedConfirmations: 20,
   basisBreachBp: 50,
   basisBreachZ: 3,
   basisBreachHoldMs: 60_000,
@@ -343,7 +350,8 @@ export function evaluate(
     } else if (state !== mem.mode) {
       mem.candidateCount = mem.candidate === state ? mem.candidateCount + 1 : 1;
       mem.candidate = state;
-      if (mem.candidateCount >= cfg.switchConfirmations) {
+      const needed = cal === state ? cfg.switchConfirmations : cfg.unexpectedConfirmations;
+      if (mem.candidateCount >= needed) {
         events.push({
           coin, ts: now, kind: "mode_switch",
           detail: { from: mem.mode, to: state, confidence, basisBp: round(basisBp(last)) },
@@ -399,7 +407,7 @@ export function evaluate(
   raise("oracle_stale", isStale, { seconds: sinceChange == null ? null : Math.round(sinceChange / 1000), markChanges: mem.markChangesSinceOracleChange });
   raise("funding_extreme", Math.abs(last.funding) >= cfg.fundingExtreme, { funding1h: last.funding, basisBp: round(b) });
   raise("oi_cap_near", oiCapUsage != null && oiCapUsage >= cfg.oiCapNear, { usage: oiCapUsage == null ? null : round(oiCapUsage, 3) });
-  raise("calendar_conflict", warm && mem.conflictCount >= cfg.switchConfirmations, { calendar: session.phase, behavior, towardMark: stats.towardMark == null ? null : round(stats.towardMark), updates: stats.updates });
+  raise("calendar_conflict", warm && mem.conflictCount >= cfg.unexpectedConfirmations, { calendar: session.phase, behavior, towardMark: stats.towardMark == null ? null : round(stats.towardMark), updates: stats.updates });
 
   return {
     state: {

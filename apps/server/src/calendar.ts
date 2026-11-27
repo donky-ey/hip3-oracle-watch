@@ -15,8 +15,18 @@ export interface Venue {
   holidays: string[];
   /** Local dates mapped to an early regular close ("HH:MM"). */
   earlyClose: Record<string, string>;
-  /** Near-24h venues: open from weekOpen to weekClose with an optional daily break. */
-  continuous?: { weekOpen: string; weekClose: string; dailyBreak: string | null };
+  /**
+   * Near-24h venues: open from weekOpen on Sunday to weekClose on Friday with an
+   * optional daily break. If `regular` is also set it only labels the phase:
+   * inside it is "regular", the rest of the open time is "extended".
+   */
+  continuous?: {
+    weekOpen: string;
+    weekClose: string;
+    dailyBreak: string | null;
+    /** On a holiday the venue is closed until this local time, then trades again (the next day's overnight session). */
+    holidayReopen?: string;
+  };
   /** False until a human has checked hours and holidays against the exchange's own notice. */
   verified: boolean;
 }
@@ -73,7 +83,8 @@ export function phaseAt(venueId: string, ts: number): Phase {
   const l = toLocal(ts, v.tz);
 
   if (v.continuous) {
-    if (v.holidays.includes(l.date)) return "closed";
+    const reopen = v.continuous.holidayReopen;
+    if (v.holidays.includes(l.date) && !(reopen && l.minutes >= hm(reopen))) return "closed";
     const open = hm(v.continuous.weekOpen);
     const close = hm(v.continuous.weekClose);
     // Week runs Sunday weekOpen -> Friday weekClose, local time.
@@ -81,7 +92,10 @@ export function phaseAt(venueId: string, ts: number): Phase {
     if (l.dow === 0 && l.minutes < open) return "closed";
     if (l.dow === 5 && l.minutes >= close) return "closed";
     if (v.continuous.dailyBreak && inside(l.minutes, win(v.continuous.dailyBreak))) return "closed";
-    return "regular";
+    if (!v.regular || v.holidays.includes(l.date)) return v.regular ? "extended" : "regular";
+    const [a, b] = win(v.regular);
+    const early = v.earlyClose[l.date];
+    return inside(l.minutes, [a, early ? hm(early) : b]) ? "regular" : "extended";
   }
 
   if (l.dow === 0 || l.dow === 6 || v.holidays.includes(l.date)) return "closed";

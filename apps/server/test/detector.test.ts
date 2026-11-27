@@ -76,7 +76,13 @@ test("behavior overrides a calendar that disagrees and reports the conflict once
     t += 30 * S;
     kinds.push(...evaluate(m, { coin: "c", now: t, session: closed }).events.map((e) => e.kind));
   }
-  assert.deepEqual(kinds, ["calendar_conflict"]); // once, and no mode_switch at start-up
+  assert.equal(kinds.length, 0); // a few minutes of disagreement is not yet worth reporting
+  for (let i = 0; i < 30; i++) {
+    feedExternal(m, t, 6);
+    t += 30 * S;
+    kinds.push(...evaluate(m, { coin: "c", now: t, session: closed }).events.map((e) => e.kind));
+  }
+  assert.deepEqual(kinds, ["calendar_conflict"]); // once it has lasted ten minutes, and only once
 });
 
 test("a quiet spell does not hand the mode back to a calendar that was just contradicted", () => {
@@ -316,4 +322,27 @@ test("runner returns only events that are new to the store", () => {
   const again = new Runner(store, opts, base - S).advance(base + 120 * S); // a restart replaying the same history
   assert.deepEqual(again, []);
   store.close();
+});
+
+test("a switch the calendar does not expect needs ten minutes of persistence", () => {
+  // Shape of a thinly traded US name overnight: an external feed that looks internal for a few minutes.
+  const run = (internalEvals: number) => {
+    const m = newMemory();
+    let t = 0;
+    let o = 100;
+    for (let i = 0; i < 12; i++) {
+      o = feedExternal(m, t, 6, o);
+      t += 30 * S;
+      evaluate(m, { coin: "c", now: t, session: open });
+    }
+    const kinds: string[] = [];
+    for (let i = 0; i < internalEvals; i++) {
+      for (let k = 0; k < 6; k++) { o += 0.01; observe(m, "c", tick(t + k * 5 * S, o, o + 0.3)); }
+      t += 30 * S;
+      kinds.push(...evaluate(m, { coin: "c", now: t, session: open }).events.map((e) => e.kind));
+    }
+    return kinds.filter((k) => k === "mode_switch").length;
+  };
+  assert.equal(run(16), 0); // window turns internal after ~5 evaluations, then 11 more: not enough
+  assert.equal(run(40), 1); // a halt the calendar did not know about is still reported
 });

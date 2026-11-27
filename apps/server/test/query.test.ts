@@ -146,7 +146,7 @@ test("coin detail bundles snapshot, series, state bands, session bands and event
   // 2026-11-24 15:00 UTC is midnight in Seoul: closed for the whole window
   assert.deepEqual(d.sessionSegments, [{ from: NOW - 120 * M, to: NOW, phase: "closed" }]);
   assert.deepEqual(d.events.map((e) => [e.kind, e.ts]), [["funding_extreme", NOW - 40 * M], ["mode_switch", NOW - 4 * M]]);
-  assert.equal(d.venue.nextScheduledChange!.phase, "extended");
+  assert.equal(d.venue.nextScheduledChange!.phase, "regular"); // 09:00 Seoul; no pre-market
 
   const nv = q.coinDetail("xyz:NVDA", 0.5, 10);
   assert.deepEqual(nv.stateSegments.map((s) => [s.state, s.from]), [["external", NOW - 30 * M]]); // clipped to the window start

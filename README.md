@@ -146,13 +146,13 @@ row is flagged as a conflict, which usually means the calendar is wrong.
 
 | Event | Fires when |
 |---|---|
-| `mode_switch` | the mode changes and holds for two evaluations |
+| `mode_switch` | the mode changes and holds: for one minute if the calendar expects the new mode, for ten minutes if it does not |
 | `basis_breach` | basis is at least 50 bp and 3 sigma from its baseline for a minute |
 | `oracle_jump` | one oracle update moves at least 100 bp |
 | `oracle_stale` | the stale state begins |
 | `funding_extreme` | hourly funding reaches 0.05% in either direction |
 | `oi_cap_near` | open interest reaches 90% of the deployer's cap |
-| `calendar_conflict` | calendar and behavior disagree for two evaluations, away from a scheduled open or close |
+| `calendar_conflict` | calendar and behavior disagree for ten minutes, away from a scheduled open or close |
 
 `detect` replays stored ticks through the same code that runs live, so it can be
 rerun over history; rows are keyed so a rerun does not duplicate them. It never
@@ -269,7 +269,8 @@ day of bars.
 
 ## Calendar caveat
 
-`apps/server/data/venues.json` and `symbols.json` beside it are hand-compiled first drafts. Every
+`apps/server/data/venues.json` and `symbols.json` beside it are hand-compiled, then corrected
+where a day of observed oracle behaviour contradicted them (each venue's `note` says which). Every
 venue is marked `verified: false`, non-US holiday lists cover 2026 only, and tickers
 whose reference market is not known map to `unknown`. Do not rely on a session
 phase until the venue has been checked against the exchange's own calendar.

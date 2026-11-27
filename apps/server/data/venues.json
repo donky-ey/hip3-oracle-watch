@@ -1,13 +1,10 @@
 {
-  "_note": "Hours and holidays are a first draft compiled by hand. Every venue stays verified=false until checked against the exchange's own calendar. Non-US holiday lists cover 2026 only. Lunch breaks (Tokyo 11:30-12:30) are not modelled. KRX extended hours are inferred, not documented: on 2026-11-26 the oracle for SKHX, SMSN and HYUNDAI behaved like an external feed until 20:00 Seoul time and like internal pricing from then on. The 08:00 start is an assumption.",
+  "_note": "Hours and holidays are hand-compiled and every venue stays verified=false until checked against the exchange. Where the oracle's observed behaviour contradicted the first draft, the hours below follow the observation; each such venue says so in its own note. Observations so far cover 2026-11-26 11:40 UTC to 2026-11-27 11:05 UTC only, a US holiday followed by a half day, so the US pattern in particular needs normal sessions to confirm it. The 'extended' list is also used for a second trading session after a lunch break. Windows cannot cross midnight.",
   "venues": {
     "us_equity": {
       "tz": "America/New_York",
       "regular": "09:30-16:00",
-      "extended": [
-        "04:00-09:30",
-        "16:00-20:00"
-      ],
+      "extended": [],
       "holidays": [
         "2026-01-01",
         "2026-01-19",
@@ -35,14 +32,20 @@
         "2026-12-24": "13:00",
         "2027-11-26": "13:00"
       },
-      "verified": false
+      "verified": false,
+      "continuous": {
+        "weekOpen": "20:00",
+        "weekClose": "20:00",
+        "dailyBreak": null,
+        "holidayReopen": "20:00"
+      },
+      "note": "Observed: closed-like all of Thanksgiving until 20:00 New York, then external-looking without a break through the overnight and pre-market hours. Modelled as open from Sunday 20:00 to Friday 20:00. Whether the overnight session before a holiday trades, and whether normal weekdays have any break, has not been observed."
     },
     "krx": {
       "tz": "Asia/Seoul",
-      "regular": "09:00-15:30",
+      "regular": "09:00-15:20",
       "extended": [
-        "08:00-09:00",
-        "15:30-20:00"
+        "16:00-20:00"
       ],
       "holidays": [
         "2026-01-01",
@@ -63,7 +66,8 @@
         "2026-12-31"
       ],
       "earlyClose": {},
-      "verified": false
+      "verified": false,
+      "note": "Observed for SKHX, SMSN and HYUNDAI: external from 09:00, internal from about 15:20 to 16:00, external again until 20:00 Seoul time. No pre-market session was seen."
     },
     "tse": {
       "tz": "Asia/Tokyo",
@@ -115,6 +119,73 @@
         "dailyBreak": null
       },
       "verified": false
+    },
+    "krx_futures": {
+      "tz": "Asia/Seoul",
+      "regular": "08:45-15:45",
+      "extended": [
+        "00:00-06:00",
+        "18:00-24:00"
+      ],
+      "holidays": [
+        "2026-01-01",
+        "2026-02-16",
+        "2026-02-17",
+        "2026-02-18",
+        "2026-03-02",
+        "2026-05-01",
+        "2026-05-05",
+        "2026-05-25",
+        "2026-06-03",
+        "2026-08-17",
+        "2026-09-24",
+        "2026-09-25",
+        "2026-10-05",
+        "2026-10-09",
+        "2026-12-25",
+        "2026-12-31"
+      ],
+      "earlyClose": {},
+      "verified": false,
+      "note": "Observed for KR200: external 08:45 to about 15:40 and from 18:00 through the night to about 06:00 Seoul time. The night session is split at midnight because windows cannot cross it; Saturday 00:00-06:00 is therefore wrongly treated as closed."
+    },
+    "tse_pts": {
+      "tz": "Asia/Tokyo",
+      "regular": "09:00-15:30",
+      "extended": [
+        "08:20-09:00",
+        "15:30-16:30",
+        "17:00-23:59"
+      ],
+      "holidays": [
+        "2026-12-31",
+        "2027-01-01"
+      ],
+      "earlyClose": {},
+      "verified": false,
+      "note": "Observed for KIOXIA and SOFTBANK: external until about midnight Tokyo time, internal overnight, external again before the cash open, with a short internal spell around 16:30-17:00. The exact session edges are assumed from that pattern."
+    },
+    "sse": {
+      "tz": "Asia/Shanghai",
+      "regular": "09:30-11:30",
+      "extended": [
+        "13:00-15:00"
+      ],
+      "holidays": [],
+      "earlyClose": {},
+      "verified": false,
+      "note": "Observed for CXMT, GIGADEV, UNITREE and CAMBRICON: external 09:30-11:30 and 13:00-15:00 China time, internal over lunch and after the close. No holiday list yet."
+    },
+    "hkex": {
+      "tz": "Asia/Hong_Kong",
+      "regular": "09:30-12:00",
+      "extended": [
+        "13:00-16:00"
+      ],
+      "holidays": [],
+      "earlyClose": {},
+      "verified": false,
+      "note": "Observed for ZHIPU and MINIMAX: external 09:30-12:00 and 13:00-16:00 Hong Kong time. SHEIN showed the same open and close. No holiday list yet."
     }
   }
 }
