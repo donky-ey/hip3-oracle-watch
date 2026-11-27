@@ -1,8 +1,11 @@
 node_modules
+**/node_modules
 .git
 *.db
 *.db-wal
 *.db-shm
 docs
-test
+apps/server/test
+apps/web
 alerts.json
+.next

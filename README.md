@@ -11,6 +11,19 @@ character](docs/posts/2026-11-26-seoul-2000.md).
 
 ![Status page](docs/status-page.png)
 
+## Layout
+
+An npm workspaces monorepo.
+
+| Path | Contents |
+|---|---|
+| `apps/server` | collector, detector, MCP server, HTTP API and the built-in status page |
+| `apps/web` | front end (Next.js), consuming the HTTP API |
+| `packages/api-types` | response types of the HTTP API, shared by server and front end |
+
+Install once at the root; every command below runs from the root too, so a
+relative `--db` path always means the same file.
+
 ## Run
 
 Requires Node 22.13 or newer.
@@ -104,7 +117,7 @@ that moment so mismatches stand out. `--json` prints the same thing as JSON.
 The API does not say whether the deployer's oracle is following an external market
 or its own internal pricing, so `detect` infers it from two kinds of evidence.
 
-- Calendar: whether the underlying market is open, from `data/venues.json`.
+- Calendar: whether the underlying market is open, from `apps/server/data/venues.json`.
 - Behavior: over the last five minutes, the share of oracle updates that moved
   toward the mark price. Internal pricing creeps toward mark; an external feed
   moves both ways.
@@ -162,7 +175,7 @@ Client configuration, with absolute paths filled in:
   "mcpServers": {
     "hip3-oracle-watch": {
       "command": "npx",
-      "args": ["tsx", "/path/to/hip3-oracle-watch/src/cli.ts", "mcp", "--db", "/path/to/oracle-watch.db"]
+      "args": ["tsx", "/path/to/hip3-oracle-watch/apps/server/src/cli.ts", "mcp", "--db", "/path/to/oracle-watch.db"]
     }
   }
 }
@@ -246,7 +259,7 @@ day of bars.
 
 ## Calendar caveat
 
-`data/venues.json` and `data/symbols.json` are hand-compiled first drafts. Every
+`apps/server/data/venues.json` and `symbols.json` beside it are hand-compiled first drafts. Every
 venue is marked `verified: false`, non-US holiday lists cover 2026 only, and tickers
 whose reference market is not known map to `unknown`. Do not rely on a session
 phase until the venue has been checked against the exchange's own calendar.

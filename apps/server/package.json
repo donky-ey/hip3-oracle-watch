@@ -1,0 +1,29 @@
+{
+  "name": "@hip3-oracle-watch/server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Watches oracle state and mark/oracle dislocations on Hyperliquid HIP-3 equity and commodity perps",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "tsx src/cli.ts run",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@hip3-oracle-watch/api-types": "*",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "https-proxy-agent": "^7.0.6",
+    "ws": "^8.18.0",
+    "zod": "^4.6.7",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/ws": "^8.5.13",
+    "typescript": "^5.7.2"
+  }
+}

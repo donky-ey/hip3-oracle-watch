@@ -4,7 +4,7 @@
 
 import type { Store } from "./db.ts";
 import { nextChange, phaseAt, venueFor, venues, type Phase } from "./calendar.ts";
-import type { CoinDetail, CoinList, CoinSnapshot, Health, Overview, SeriesPoint, SessionSegment, StateSegment } from "./api-types.ts";
+import type { CoinDetail, CoinList, CoinSnapshot, Health, Overview, SeriesPoint, SessionSegment, StateSegment } from "@hip3-oracle-watch/api-types";
 
 const SOURCE = "Hyperliquid info API (metaAndAssetCtxs, activeAssetCtx), collected by hip3-oracle-watch";
 const STATE_NOTE =

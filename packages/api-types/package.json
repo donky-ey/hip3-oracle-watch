@@ -1,0 +1,15 @@
+{
+  "name": "@hip3-oracle-watch/api-types",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Response types of the hip3-oracle-watch HTTP API",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "types": "./src/index.ts"
+}

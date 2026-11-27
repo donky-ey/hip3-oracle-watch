@@ -1,38 +1,31 @@
 {
   "name": "hip3-oracle-watch",
   "version": "0.1.0",
+  "private": true,
   "description": "Watches oracle state and mark/oracle dislocations on Hyperliquid HIP-3 equity and commodity perps",
   "license": "MIT",
   "type": "module",
   "engines": {
     "node": ">=22.13"
   },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "start": "tsx src/cli.ts run",
-    "collect": "tsx src/cli.ts collect",
-    "status": "tsx src/cli.ts status",
-    "compact": "tsx src/cli.ts compact",
-    "detect": "tsx src/cli.ts detect",
-    "events": "tsx src/cli.ts events",
-    "states": "tsx src/cli.ts states",
-    "serve": "tsx src/cli.ts serve",
-    "mcp": "tsx src/cli.ts mcp",
-    "alert": "tsx src/cli.ts alert",
-    "schedule": "tsx src/cli.ts schedule",
-    "session": "tsx src/cli.ts session",
-    "typecheck": "tsc --noEmit",
-    "test": "tsx --test test/*.test.ts"
-  },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.2",
-    "https-proxy-agent": "^7.0.6",
-    "ws": "^8.18.0",
-    "zod": "^4.6.7",
-    "tsx": "^4.19.2"
-  },
-  "devDependencies": {
-    "@types/node": "^22.10.0",
-    "@types/ws": "^8.5.13",
-    "typescript": "^5.7.2"
+    "start": "tsx apps/server/src/cli.ts run",
+    "collect": "tsx apps/server/src/cli.ts collect",
+    "status": "tsx apps/server/src/cli.ts status",
+    "compact": "tsx apps/server/src/cli.ts compact",
+    "detect": "tsx apps/server/src/cli.ts detect",
+    "events": "tsx apps/server/src/cli.ts events",
+    "states": "tsx apps/server/src/cli.ts states",
+    "serve": "tsx apps/server/src/cli.ts serve",
+    "mcp": "tsx apps/server/src/cli.ts mcp",
+    "alert": "tsx apps/server/src/cli.ts alert",
+    "schedule": "tsx apps/server/src/cli.ts schedule",
+    "session": "tsx apps/server/src/cli.ts session",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm test --workspaces --if-present"
   }
 }

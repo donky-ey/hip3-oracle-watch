@@ -1,8 +1,9 @@
 # HTTP API for front ends
 
 Read-only JSON over HTTP, served by `npm run serve` or `npm start`. No
-authentication. Response types are in [`src/api-types.ts`](../src/api-types.ts);
-that file imports nothing and can be copied into a client project unchanged.
+authentication. Response types are in the `@hip3-oracle-watch/api-types` workspace
+package ([source](../packages/api-types/src/index.ts)). It imports nothing, so it
+can also be copied into a project outside this repository.
 
 Base URL in local development: `http://127.0.0.1:8787`
 
@@ -124,12 +125,28 @@ Whether the collector and detector are running.
 
 ## Using it from Next.js
 
+Inside this repository the app lives in `apps/web` and depends on the types package:
+
+```json
+{ "dependencies": { "@hip3-oracle-watch/api-types": "*" } }
+```
+
+The package ships TypeScript source, so tell Next.js to compile it:
+
+```ts
+// apps/web/next.config.ts
+import type { NextConfig } from "next";
+
+const config: NextConfig = { transpilePackages: ["@hip3-oracle-watch/api-types"] };
+export default config;
+```
+
 Fetching in a Server Component avoids CORS altogether and keeps the API address
 off the client. Data changes every few seconds, so do not cache it for long.
 
 ```ts
 // lib/api.ts
-import type { CoinDetail, CoinList } from "./api-types";
+import type { CoinDetail, CoinList } from "@hip3-oracle-watch/api-types";
 
 const BASE = process.env.ORACLE_WATCH_API ?? "http://127.0.0.1:8787";
 

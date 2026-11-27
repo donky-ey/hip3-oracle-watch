@@ -1,6 +1,7 @@
 // Response shapes of the HTTP API that a front end is expected to consume.
-// This file imports nothing, so it can be copied into a client project as is.
-// The server's own return types are checked against it at compile time.
+// Shared by the server and any front end in this repository. It imports nothing,
+// so it can also be copied into a project outside it. The server's own return
+// types are checked against it at compile time.
 
 export type OracleStateName = "external" | "internal" | "transition" | "stale" | "unknown";
 export type Confidence = "both" | "behavior" | "calendar" | "none";
