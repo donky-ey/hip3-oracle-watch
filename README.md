@@ -197,9 +197,13 @@ channel. At most 20 messages go to one sink per ten-second pass.
 `serve` binds to 127.0.0.1 by default and serves the status page at `/`. There is
 no authentication; put it behind a reverse proxy before exposing it.
 
+Front-end guide with response shapes and a Next.js example: [docs/api.md](docs/api.md).
+
 | Route | Parameters |
 |---|---|
 | `GET /v1/health` | |
+| `GET /v1/coins` | |
+| `GET /v1/coin/{coin}` | `hours`, `intervalMinutes` |
 | `GET /v1/overview` | |
 | `GET /v1/state/{coin}` | |
 | `GET /v1/dislocations` | `minBp`, `state`, `limit` |

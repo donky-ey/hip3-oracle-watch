@@ -126,3 +126,49 @@ test("MCP server lists five read-only tools and answers a call", async () => {
   await client.close();
   store.close();
 });
+
+test("coin detail bundles snapshot, series, state bands, session bands and events", () => {
+  const { q, store } = fixture();
+  const d = q.coinDetail("SKHX", 2, 10);
+  assert.equal(d.coin, "xyz:SKHX");
+  assert.equal(d.current.state, "internal");
+  assert.equal(d.window.to, NOW);
+  assert.equal(d.window.from, NOW - 120 * M);
+  assert.equal(d.venue.id, "krx");
+  assert.equal(d.venue.timezone, "Asia/Seoul");
+  assert.equal(typeof d.series[0]!.ts, "number");
+  assert.equal(d.series.at(-1)!.basisBp, -125);
+  // external since before the window, internal for the last four minutes
+  assert.deepEqual(d.stateSegments.map((s) => [s.state, s.from, s.to, s.conflict]), [
+    ["external", NOW - 50 * M, NOW - 4 * M, true],
+    ["internal", NOW - 4 * M, NOW, false],
+  ]);
+  // 2026-11-24 15:00 UTC is midnight in Seoul: closed for the whole window
+  assert.deepEqual(d.sessionSegments, [{ from: NOW - 120 * M, to: NOW, phase: "closed" }]);
+  assert.deepEqual(d.events.map((e) => [e.kind, e.ts]), [["funding_extreme", NOW - 40 * M], ["mode_switch", NOW - 4 * M]]);
+  assert.equal(d.venue.nextScheduledChange!.phase, "extended");
+
+  const nv = q.coinDetail("xyz:NVDA", 0.5, 10);
+  assert.deepEqual(nv.stateSegments.map((s) => [s.state, s.from]), [["external", NOW - 30 * M]]); // clipped to the window start
+  assert.equal(q.coinDetail("xyz:GOLD", 1).stateSegments.length, 0); // detector has not seen it
+  assert.equal(route(q, "GET", "/v1/coin/SKHX?hours=2&intervalMinutes=10").status, 200);
+  assert.equal(route(q, "GET", "/v1/coin/NOPE").status, 404);
+  assert.deepEqual((route(q, "GET", "/v1/coins").body as { coins: { coin: string; venue: string | null }[] }).coins.map((c) => [c.coin, c.venue]),
+    [["xyz:GOLD", "cme"], ["xyz:NVDA", "us_equity"], ["xyz:SKHX", "krx"]]);
+  store.close();
+});
+
+test("CORS headers are sent, and preflight is answered", async () => {
+  const { q, store } = fixture();
+  const { startHttp } = await import("../src/http.ts");
+  const server = startHttp(q, 0, "127.0.0.1", "http://localhost:3000");
+  await new Promise((r) => server.once("listening", r));
+  const port = (server.address() as { port: number }).port;
+  const res = await fetch(`http://127.0.0.1:${port}/v1/coins`);
+  assert.equal(res.headers.get("access-control-allow-origin"), "http://localhost:3000");
+  assert.equal(res.status, 200);
+  const pre = await fetch(`http://127.0.0.1:${port}/v1/coins`, { method: "OPTIONS" });
+  assert.equal(pre.status, 204);
+  server.close();
+  store.close();
+});

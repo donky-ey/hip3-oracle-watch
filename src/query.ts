@@ -4,6 +4,7 @@
 
 import type { Store } from "./db.ts";
 import { nextChange, phaseAt, venueFor, venues, type Phase } from "./calendar.ts";
+import type { CoinDetail, CoinList, CoinSnapshot, Health, Overview, SeriesPoint, SessionSegment, StateSegment } from "./api-types.ts";
 
 const SOURCE = "Hyperliquid info API (metaAndAssetCtxs, activeAssetCtx), collected by hip3-oracle-watch";
 const STATE_NOTE =
@@ -67,7 +68,7 @@ export class Queries {
     return new Map(rows.map((r) => [r.coin, { ...r }]));
   }
 
-  health() {
+  health(): Health {
     const now = this.clock();
     const lastPoll = (this.store.db.prepare("SELECT max(ts) AS t FROM polls").get() as { t: number | null }).t;
     const lastRun = Number(this.store.getKv("detector_last_run") ?? 0) || null;
@@ -88,7 +89,7 @@ export class Queries {
     return hit;
   }
 
-  private view(t: TickRow, s: StateRow | undefined) {
+  private view(t: TickRow, s: StateRow | undefined): CoinSnapshot {
     const now = this.clock();
     return {
       coin: t.coin,
@@ -127,7 +128,7 @@ export class Queries {
     };
   }
 
-  overview() {
+  overview(): Overview {
     const states = this.latestStates();
     const rows = [...this.latestTicks().values()].map((t) => this.view(t, states.get(t.coin)));
     rows.sort((a, b) => Math.abs(b.basisBp) - Math.abs(a.basisBp));
@@ -198,6 +199,89 @@ export class Queries {
       coin, intervalMinutes: step / MIN, from: iso(from), count: points.length, points,
       units: { basisBp: "basis points at bucket close", fundingHourly: "fraction per hour at bucket close" },
       source: SOURCE,
+    };
+  }
+
+  /** Every perp with recent data, for building routes or a picker. */
+  coinList(): CoinList {
+    const coins = [...this.latestTicks().keys()].sort().map((coin) => ({
+      coin,
+      category: this.categories.get(coin) ?? null,
+      venue: venueFor(coin, this.categories.get(coin)),
+    }));
+    return { coins };
+  }
+
+  /**
+   * Everything a detail page needs for one perp in a single response: the current
+   * snapshot, the basis series, the state and session bands to draw behind it,
+   * and the events to mark on it. Times are epoch milliseconds.
+   */
+  coinDetail(coinArg: string, hours = 24, intervalMinutes = 5): CoinDetail {
+    const coin = this.resolve(coinArg);
+    const now = this.clock();
+    const hist = this.basisHistory(coin, hours, intervalMinutes);
+    const from = Date.parse(hist.from);
+    const series: SeriesPoint[] = hist.points.map((p) => ({
+      ts: Date.parse(p.t), basisBp: p.basisBp, basisMinBp: p.basisMinBp, basisMaxBp: p.basisMaxBp,
+      oraclePx: p.oraclePx, markPx: p.markPx, fundingHourly: p.fundingHourly,
+    }));
+
+    // The state in force at `from` is the last change before it.
+    const rows = this.store.db
+      .prepare(
+        `SELECT ts, state, confidence, conflict FROM (
+           SELECT ts, state, confidence, conflict FROM states WHERE coin = ? AND ts <= ? ORDER BY ts DESC LIMIT 1
+         ) UNION ALL
+         SELECT ts, state, confidence, conflict FROM states WHERE coin = ? AND ts > ? AND ts <= ? ORDER BY ts`,
+      )
+      .all(coin, from, coin, from, now) as { ts: number; state: string; confidence: string; conflict: number }[];
+    const stateSegments: StateSegment[] = [];
+    for (const r of rows) {
+      const start = Math.max(r.ts, from);
+      const last = stateSegments.at(-1);
+      if (last) last.to = start;
+      // Consecutive rows can differ only in the conflict flag; keep those as separate bands.
+      stateSegments.push({ from: start, to: now, state: r.state, confidence: r.confidence, conflict: Boolean(r.conflict) });
+    }
+
+    const venue = venueFor(coin, this.categories.get(coin));
+    const sessionSegments: SessionSegment[] = [];
+    if (venue) {
+      let t = from;
+      while (t < now) {
+        const n = nextChange(venue, t);
+        const end = n ? Math.min(n.ts, now) : now;
+        sessionSegments.push({ from: t, to: end, phase: phaseAt(venue, t) });
+        if (!n) break;
+        t = n.ts;
+      }
+    }
+    const next = venue ? nextChange(venue, now) : null;
+
+    const events = (this.store.db
+      .prepare("SELECT ts, kind, detail FROM events WHERE coin = ? AND ts >= ? AND ts <= ? ORDER BY ts")
+      .all(coin, from, now) as { ts: number; kind: string; detail: string }[])
+      .map((e) => ({ ts: e.ts, kind: e.kind, detail: JSON.parse(e.detail) as Record<string, number | string | null> }));
+
+    return {
+      coin,
+      category: this.categories.get(coin) ?? null,
+      current: this.view(this.latestTicks().get(coin)!, this.latestStates().get(coin)),
+      venue: {
+        id: venue,
+        timezone: venue ? venues[venue]!.tz : null,
+        verified: venue ? venues[venue]!.verified : false,
+        nextScheduledChange: next,
+      },
+      window: { from, to: now, intervalMinutes: hist.intervalMinutes },
+      series,
+      stateSegments,
+      sessionSegments,
+      events,
+      note: STATE_NOTE,
+      source: SOURCE,
+      health: this.health(),
     };
   }
 

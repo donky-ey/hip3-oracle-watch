@@ -29,6 +29,7 @@ const { positionals, values } = parseArgs({
     days: { type: "string", default: "7" },
     json: { type: "boolean", default: false },
     host: { type: "string", default: "127.0.0.1" },
+    "cors-origin": { type: "string", default: "*" },
     kind: { type: "string" },
     coin: { type: "string" },
   },
@@ -73,7 +74,7 @@ if (cmd === "collect") {
   const store = new Store(values.db!);
   const categories = await categoriesOrEmpty();
   const runner = new Runner(store, { ...runnerDefaults, dex: values.dex!, categories }, Date.now() - Number(values.hours) * 3_600_000);
-  const server = startHttp(new Queries(store, categories), port, values.host!);
+  const server = startHttp(new Queries(store, categories), port, values.host!, values["cors-origin"]);
   log(`status page and API on http://${values.host}:${port}/`);
   const alertCfg = existsSync(values.config!) ? loadConfig(values.config!) : null;
   log(alertCfg ? `alerts on, ${alertCfg.sinks.length} sink(s)` : `alerts off (no ${values.config})`);
@@ -197,7 +198,7 @@ if (cmd === "collect") {
   store.close();
 } else if (cmd === "serve") {
   const store = new Store(values.db!);
-  const server = startHttp(new Queries(store, await categoriesOrEmpty()), Number(values.port), values.host!);
+  const server = startHttp(new Queries(store, await categoriesOrEmpty()), Number(values.port), values.host!, values["cors-origin"]);
   console.log(`status page and API on http://${values.host}:${values.port}/`);
   const stop = () => {
     server.close();
@@ -250,6 +251,6 @@ if (cmd === "collect") {
   const s = sessionFor(coin, Date.now(), cats.get(coin));
   console.log(JSON.stringify({ ...s, next: s.next && { ...s.next, at: iso(s.next.ts) } }, null, 2));
 } else {
-  console.log("usage: cli.ts <run|collect|status|compact|detect|events|states|serve|mcp|alert|schedule|session <coin>> [--db path] [--dex xyz] [--poll-ms 5000] [--ws-top 40] [--hours 24] [--retention-days 7] [--vacuum] [--follow] [--kind k] [--coin c] [--port 8787] [--host 127.0.0.1] [--config alerts.json] [--once] [--days 7] [--json]");
+  console.log("usage: cli.ts <run|collect|status|compact|detect|events|states|serve|mcp|alert|schedule|session <coin>> [--db path] [--dex xyz] [--poll-ms 5000] [--ws-top 40] [--hours 24] [--retention-days 7] [--vacuum] [--follow] [--kind k] [--coin c] [--port 8787] [--host 127.0.0.1] [--cors-origin *] [--config alerts.json] [--once] [--days 7] [--json]");
   process.exit(cmd ? 1 : 0);
 }
